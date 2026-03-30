@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNotes } from '../hooks/useNotes'
+import ThemeToggle from './ThemeToggle'
 import NoteEditor from './NoteEditor'
 import NoteCard from './NoteCard'
 
@@ -72,6 +73,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
         <span className="notes-logo">Notes</span>
         <div className="notes-header-right">
           <span className="notes-user-email">{userEmail}</span>
+          <ThemeToggle />
           <button type="button" className="btn-secondary" onClick={onSignOut}>
             Sign out
           </button>

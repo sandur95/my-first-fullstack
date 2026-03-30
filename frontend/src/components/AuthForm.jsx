@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import ThemeToggle from './ThemeToggle'
 
 /**
  * Combined login / sign-up form.
@@ -50,6 +51,7 @@ export default function AuthForm() {
 
   return (
     <div className="auth-container">
+      <ThemeToggle className="btn-theme-corner" />
       <div className="auth-card">
         <h1>{isSignup ? 'Create account' : 'Sign in'}</h1>
 

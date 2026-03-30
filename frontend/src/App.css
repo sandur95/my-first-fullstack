@@ -13,17 +13,18 @@ button {
   font-size: .875rem;
   font-weight: 500;
   padding: .5rem 1rem;
-  transition: background .15s, box-shadow .15s;
+  /* Include color + border-color so theme switches animate on buttons too */
+  transition: background .15s, box-shadow .15s, color .15s, border-color .15s;
   line-height: 1.4;
 }
 
 button[type="submit"],
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle) {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme) {
   background: var(--primary);
   color: #fff;
 }
 button[type="submit"]:hover,
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):hover {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):hover {
   background: var(--primary-hover);
 }
 button:disabled {
@@ -48,6 +49,43 @@ button:disabled {
 .btn-danger:hover {
   background: var(--danger);
   color: #fff;
+}
+
+.btn-theme {
+  background: none;
+  border-color: var(--border);
+  color: var(--text-muted);
+  padding: .375rem .5rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+.btn-theme:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.btn-theme-corner {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+}
+
+/* ---------------------------------------------------------------------------
+   Smooth theme colour transitions
+   Applied to the surfaces that are most visually prominent when switching.
+   Omitted from the wildcard (*) to avoid interfering with hover animations.
+   --------------------------------------------------------------------------- */
+.auth-card,
+.auth-card input,
+.notes-header,
+.notes-layout,
+.note-card,
+.note-editor,
+.form-error,
+.form-message {
+  transition: background-color 0.2s ease, color 0.2s ease,
+              border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* ---------------------------------------------------------------------------
@@ -145,6 +183,10 @@ button:disabled {
   .form-error  { background: #450a0a; border-color: #991b1b; }
   .form-message { background: #1e3a5f; border-color: #1d4ed8; }
 }
+[data-theme="dark"] .form-error   { background: #450a0a; border-color: #991b1b; }
+[data-theme="dark"] .form-message { background: #1e3a5f; border-color: #1d4ed8; }
+[data-theme="light"] .form-error   { background: #fef2f2; border-color: #fecaca; }
+[data-theme="light"] .form-message { background: #eff6ff; border-color: #bfdbfe; }
 
 /* ---------------------------------------------------------------------------
    Notes layout

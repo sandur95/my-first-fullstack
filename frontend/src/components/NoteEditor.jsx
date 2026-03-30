@@ -68,11 +68,9 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving }) {
         <button type="submit" disabled={saving}>
           {submitLabel}
         </button>
-        {editingNote !== null ? (
-          <button type="button" className="btn-secondary" onClick={onCancel}>
-            Cancel
-          </button>
-        ) : null}
+        <button type="button" className="btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </form>
   )
