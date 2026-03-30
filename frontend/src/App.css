@@ -1,0 +1,352 @@
+/* =============================================================================
+   Notes app component styles
+   All sizes use rem so they scale with the user's browser font preference.
+   ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+   Base buttons
+   --------------------------------------------------------------------------- */
+button {
+  cursor: pointer;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: .875rem;
+  font-weight: 500;
+  padding: .5rem 1rem;
+  transition: background .15s, box-shadow .15s;
+  line-height: 1.4;
+}
+
+button[type="submit"],
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle) {
+  background: var(--primary);
+  color: #fff;
+}
+button[type="submit"]:hover,
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):hover {
+  background: var(--primary-hover);
+}
+button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-secondary:hover {
+  box-shadow: var(--shadow);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
+   Auth
+   --------------------------------------------------------------------------- */
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 2rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-card h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.auth-card label {
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: -.25rem;
+}
+
+.auth-card input {
+  padding: .5rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  width: 100%;
+}
+.auth-card input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.auth-card button[type="submit"] {
+  margin-top: .25rem;
+  width: 100%;
+  padding: .625rem;
+}
+
+.auth-toggle {
+  background: none !important;
+  border: none !important;
+  color: var(--primary);
+  font-size: .875rem;
+  margin-top: 1rem;
+  width: 100%;
+  text-align: center;
+  padding: .25rem;
+}
+.auth-toggle:hover {
+  text-decoration: underline;
+}
+
+.form-error {
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+  padding: .5rem .75rem;
+  font-size: .875rem;
+}
+
+.form-message {
+  background: #eff6ff;
+  color: var(--primary);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+  padding: .5rem .75rem;
+  font-size: .875rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .form-error  { background: #450a0a; border-color: #991b1b; }
+  .form-message { background: #1e3a5f; border-color: #1d4ed8; }
+}
+
+/* ---------------------------------------------------------------------------
+   Notes layout
+   --------------------------------------------------------------------------- */
+.notes-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.notes-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .75rem 1.5rem;
+}
+
+.notes-logo {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -.5px;
+}
+
+.notes-header-right {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+.notes-user-email {
+  font-size: .8125rem;
+  color: var(--text-muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-main {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.notes-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notes-list-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Note editor form
+   --------------------------------------------------------------------------- */
+.note-editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.note-editor h2 {
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.note-editor label {
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: -.25rem;
+}
+
+.note-editor input,
+.note-editor textarea {
+  padding: .5rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: .9375rem;
+  font-family: inherit;
+  width: 100%;
+  resize: vertical;
+}
+.note-editor input:focus,
+.note-editor textarea:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.note-editor-actions {
+  display: flex;
+  gap: .5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Notes grid
+   --------------------------------------------------------------------------- */
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Note card
+   --------------------------------------------------------------------------- */
+.note-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: .75rem;
+  transition: box-shadow .15s;
+}
+.note-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+
+.note-card-body {
+  flex: 1;
+}
+
+.note-card-title {
+  font-size: 1rem;
+  margin-bottom: .25rem;
+}
+
+.note-card-content {
+  font-size: .875rem;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: .625rem;
+  margin-top: auto;
+}
+
+.note-card-date {
+  font-size: .75rem;
+  color: var(--text-muted);
+}
+
+.note-card-actions {
+  display: flex;
+  gap: .375rem;
+}
+
+.note-card-actions button {
+  font-size: .75rem;
+  padding: .25rem .625rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Utility states
+   --------------------------------------------------------------------------- */
+.centered-status {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: .9375rem;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3rem 1rem;
+  font-size: .9375rem;
+}
