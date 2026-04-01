@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNotes } from '../hooks/useNotes'
 import { useProfile } from '../hooks/useProfile'
 import { useTags } from '../hooks/useTags'
@@ -27,7 +27,13 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const [view, setView] = useState('list')
   const tab = view === 'archive' ? 'archive' : 'active'
 
-  const { notes, loading, error, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab)
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Debounce timer ID stored in a ref — updating it never triggers a re-render.
+  // (rerender-use-ref-transient-values)
+  const debounceRef = useRef(null)
+
+  const { notes, loading, error, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab, debouncedSearch)
   const { fullName, updateFullName } = useProfile(userId)
   const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
@@ -104,6 +110,12 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     setActiveTagId(prev => (prev === tagId ? null : tagId))
   }
 
+  function clearSearch() {
+    clearTimeout(debounceRef.current)
+    setSearchInput('')
+    setDebouncedSearch('')
+  }
+
   async function handleProfileSave(name) {
     setSaving(true)
     setSaveError(null)
@@ -172,7 +184,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
             onCancel={handleCancel}
             saving={saving}
           />
-        ) : loading ? (
+        ) : (loading && notes.length === 0 && !debouncedSearch) ? (
           <p className="centered-status">Loading notes…</p>
         ) : (
           <>
@@ -187,16 +199,44 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               <button
                 type="button"
                 className={`notes-tab${tab === 'archive' ? ' notes-tab--active' : ''}`}
-                onClick={() => { setSaveError(null); setView('archive') }}
+                onClick={() => { setSaveError(null); clearSearch(); setView('archive') }}
               >
                 Archived
               </button>
             </div>
 
+            {tab === 'active' ? (
+              <div className="notes-search">
+                <input
+                  type="search"
+                  className="notes-search-input"
+                  placeholder="Search notes…"
+                  value={searchInput}
+                  onChange={e => {
+                    const value = e.target.value
+                    setSearchInput(value)
+                    clearTimeout(debounceRef.current)
+                    debounceRef.current = setTimeout(() => setDebouncedSearch(value), 300)
+                  }}
+                  aria-label="Search notes"
+                />
+                {searchInput !== '' ? (
+                  <button
+                    type="button"
+                    className="notes-search-clear"
+                    onClick={clearSearch}
+                    aria-label="Clear search"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="notes-list-header">
               <h2 className="notes-list-title">
                 {notes.length === 0
-                  ? (tab === 'archive' ? 'No archived notes' : 'No notes yet')
+                  ? (tab === 'archive' ? 'No archived notes' : (debouncedSearch !== '' ? 'No results' : 'No notes yet'))
                   : tab === 'archive'
                     ? `${notes.length} archived`
                     : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
@@ -226,7 +266,9 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               <p className="empty-state">
                 {tab === 'archive'
                   ? 'Archived notes will appear here.'
-                  : 'Click \u201c+ New note\u201d to get started.'}
+                  : debouncedSearch !== ''
+                    ? 'No notes match your search.'
+                    : 'Click \u201c+ New note\u201d to get started.'}
               </p>
             ) : (
               <div className="notes-grid">

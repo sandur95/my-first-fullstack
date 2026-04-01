@@ -19,12 +19,12 @@ button {
 }
 
 button[type="submit"],
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme) {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear) {
   background: var(--primary);
   color: #fff;
 }
 button[type="submit"]:hover,
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):hover {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):hover {
   background: var(--primary-hover);
 }
 button:disabled {
@@ -83,6 +83,7 @@ button:disabled {
 .note-card,
 .note-card--pinned,
 .note-editor,
+.notes-search-input,
 .form-error,
 .form-message {
   transition: background-color 0.2s ease, color 0.2s ease,
@@ -527,4 +528,56 @@ button:disabled {
   color: var(--text-muted);
   padding: 3rem 1rem;
   font-size: .9375rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Search input
+   --------------------------------------------------------------------------- */
+.notes-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notes-search-input {
+  width: 100%;
+  padding: .5rem .75rem;
+  padding-right: 2.25rem; /* room for the clear button */
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: .9375rem;
+  font-family: inherit;
+}
+.notes-search-input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+/* Hide the browser-native clear button — we provide our own */
+.notes-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.notes-search-clear {
+  position: absolute;
+  right: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+  border: none;
+  color: var(--surface);
+  font-size: .5625rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: background .15s;
+}
+.notes-search-clear:hover {
+  background: var(--text);
 }

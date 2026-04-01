@@ -11,8 +11,9 @@ import { supabase } from '../lib/supabase'
  *
  * @param {string|null} userId - The authenticated user's UUID
  * @param {'active'|'archive'} [tab='active'] - Which set of notes to load
+ * @param {string} [search=''] - Full-text search query; empty string disables search
  */
-export function useNotes(userId, tab = 'active') {
+export function useNotes(userId, tab = 'active', search = '') {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -36,6 +37,14 @@ export function useNotes(userId, tab = 'active') {
         .is('archived_at', null)
         .order('pinned', { ascending: false })
         .order('created_at', { ascending: false })
+      // Full-text search — only on active tab because the GIN index is partial
+      // (WHERE archived_at IS NULL); applying textSearch to the archive tab would
+      // force a sequential scan.  websearch_to_tsquery handles natural user input
+      // (spaces = AND, "phrase", -exclude) without sanitisation on our side.
+      // (advanced-full-text-search)
+      if (search) {
+        query = query.textSearch('search_vector', search, { type: 'websearch', config: 'english' })
+      }
     }
     const { data, error } = await query
     if (error) {
@@ -44,7 +53,7 @@ export function useNotes(userId, tab = 'active') {
       setNotes(data)
     }
     setLoading(false)
-  }, [userId, tab])
+  }, [userId, tab, search])
 
   useEffect(() => {
     fetchNotes()
