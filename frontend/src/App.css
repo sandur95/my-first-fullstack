@@ -590,3 +590,23 @@ button:disabled {
   justify-content: center;
   padding-top: .5rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Toast error notification
+   --------------------------------------------------------------------------- */
+.toast-error {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: .625rem 1.125rem;
+  font-size: .875rem;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,.22);
+  z-index: 100;
+  pointer-events: none;
+  white-space: nowrap;
+}

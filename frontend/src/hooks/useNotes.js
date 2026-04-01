@@ -164,25 +164,25 @@ export function useNotes(userId, tab = 'active', search = '') {
    * @returns {Promise<void>}
    */
   const pinNote = useCallback(async (id, currentPinned) => {
+    let snapshot
+    setNotes(prev => {
+      snapshot = prev
+      return prev
+        .map(n => (n.id === id ? { ...n, pinned: !currentPinned } : n))
+        .toSorted((a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at))
+    })
     const { data, error } = await supabase
       .from('notes')
       .update({ pinned: !currentPinned })
       .eq('id', id)
       .select()
       .single()
-    if (error) throw error
-    // Update in-place then re-sort: pinned DESC, created_at DESC.
-    // Preserve existing note_tags — pin toggle does not affect tags.
-    // toSorted() returns a new array (immutable) — no stale closure risk.
-    // (rerender-functional-setstate, js-tosorted-immutable)
+    if (error) { setNotes(snapshot); throw error }
+    // Reconcile with server row; preserve note_tags.
     setNotes(prev =>
       prev
         .map(n => (n.id === id ? { ...data, note_tags: n.note_tags } : n))
-        .toSorted(
-          (a, b) =>
-            b.pinned - a.pinned ||
-            new Date(b.created_at) - new Date(a.created_at)
-        )
+        .toSorted((a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at))
     )
   }, [])
 
@@ -205,12 +205,13 @@ export function useNotes(userId, tab = 'active', search = '') {
    * @returns {Promise<void>}
    */
   const archiveNote = useCallback(async (id) => {
+    let snapshot
+    setNotes(prev => { snapshot = prev; return prev.filter(n => n.id !== id) })
     const { error } = await supabase
       .from('notes')
       .update({ archived_at: new Date().toISOString() })
       .eq('id', id)
-    if (error) throw error
-    setNotes(prev => prev.filter(n => n.id !== id))
+    if (error) { setNotes(snapshot); throw error }
   }, [])
 
   /**
@@ -221,12 +222,13 @@ export function useNotes(userId, tab = 'active', search = '') {
    * @returns {Promise<void>}
    */
   const unarchiveNote = useCallback(async (id) => {
+    let snapshot
+    setNotes(prev => { snapshot = prev; return prev.filter(n => n.id !== id) })
     const { error } = await supabase
       .from('notes')
       .update({ archived_at: null })
       .eq('id', id)
-    if (error) throw error
-    setNotes(prev => prev.filter(n => n.id !== id))
+    if (error) { setNotes(snapshot); throw error }
   }, [])
 
   /**

@@ -32,6 +32,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   // Debounce timer ID stored in a ref — updating it never triggers a re-render.
   // (rerender-use-ref-transient-values)
   const debounceRef = useRef(null)
+  const [toastMessage, setToastMessage] = useState(null)
+  const toastTimeoutRef = useRef(null)
 
   const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab, debouncedSearch)
   const { fullName, updateFullName } = useProfile(userId)
@@ -73,7 +75,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     try {
       await archiveNote(id)
     } catch (err) {
-      setSaveError(err.message)
+      showToast(err.message)
     }
   }
 
@@ -81,7 +83,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     try {
       await unarchiveNote(id)
     } catch (err) {
-      setSaveError(err.message)
+      showToast(err.message)
     }
   }
 
@@ -89,7 +91,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     try {
       await pinNote(id, currentPinned)
     } catch (err) {
-      setSaveError(err.message)
+      showToast(err.message)
     }
   }
 
@@ -114,6 +116,12 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     clearTimeout(debounceRef.current)
     setSearchInput('')
     setDebouncedSearch('')
+  }
+
+  function showToast(message) {
+    clearTimeout(toastTimeoutRef.current)
+    setToastMessage(message)
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 3000)
   }
 
   async function handleProfileSave(name) {
@@ -304,6 +312,9 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
           </>
         )}
       </main>
+      {toastMessage !== null ? (
+        <div className="toast-error" role="alert">{toastMessage}</div>
+      ) : null}
     </div>
   )
 }
