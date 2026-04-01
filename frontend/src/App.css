@@ -581,3 +581,12 @@ button:disabled {
 .notes-search-clear:hover {
   background: var(--text);
 }
+
+/* ---------------------------------------------------------------------------
+   Load More button
+   --------------------------------------------------------------------------- */
+.notes-load-more {
+  display: flex;
+  justify-content: center;
+  padding-top: .5rem;
+}

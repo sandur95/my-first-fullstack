@@ -33,7 +33,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   // (rerender-use-ref-transient-values)
   const debounceRef = useRef(null)
 
-  const { notes, loading, error, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab, debouncedSearch)
+  const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab, debouncedSearch)
   const { fullName, updateFullName } = useProfile(userId)
   const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
@@ -271,21 +271,35 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                     : 'Click \u201c+ New note\u201d to get started.'}
               </p>
             ) : (
-              <div className="notes-grid">
-                {displayedNotes.map(note => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    isArchived={tab === 'archive'}
-                    onEdit={handleEdit}
-                    onPin={handlePin}
-                    onArchive={handleArchive}
-                    onUnarchive={handleUnarchive}
-                    onDeletePermanent={handleDelete}
-                    onTagClick={handleTagClick}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="notes-grid">
+                  {displayedNotes.map(note => (
+                    <NoteCard
+                      key={note.id}
+                      note={note}
+                      isArchived={tab === 'archive'}
+                      onEdit={handleEdit}
+                      onPin={handlePin}
+                      onArchive={handleArchive}
+                      onUnarchive={handleUnarchive}
+                      onDeletePermanent={handleDelete}
+                      onTagClick={handleTagClick}
+                    />
+                  ))}
+                </div>
+                {hasMore && !debouncedSearch ? (
+                  <div className="notes-load-more">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={loadingMore}
+                      onClick={loadMore}
+                    >
+                      {loadingMore ? 'Loading…' : 'Load more'}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             )}
           </>
         )}

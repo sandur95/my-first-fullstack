@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+const PAGE_SIZE = 10
+
 /**
  * Manages the notes list for the authenticated user.
  *
@@ -15,12 +17,23 @@ import { supabase } from '../lib/supabase'
  */
 export function useNotes(userId, tab = 'active', search = '') {
   const [notes, setNotes] = useState([])
+  const [totalCount, setTotalCount] = useState(null)
+  // nextOffset tracks the DB boundary: how many rows have been fetched so far.
+  // Reset to PAGE_SIZE by fetchNotes; incremented by PAGE_SIZE by loadMore.
+  const [nextOffset, setNextOffset] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
+
+  // Derived: unfetched rows exist when not searching and the DB count exceeds
+  // the number of rows we have loaded so far. Search always returns all matches
+  // at once so hasMore stays false during a search. (data-pagination)
+  const hasMore = !search && totalCount !== null && nextOffset < totalCount
 
   const fetchNotes = useCallback(async () => {
     if (!userId) {
       setNotes([])
+      setTotalCount(null)
       return
     }
     setLoading(true)
@@ -29,7 +42,12 @@ export function useNotes(userId, tab = 'active', search = '') {
     // Active:  WHERE archived_at IS NULL   → notes_active_user_pinned_created_idx
     // Archive: WHERE archived_at IS NOT NULL → notes_archived_user_created_idx
     // (query-partial-indexes)
-    let query = supabase.from('notes').select('*, note_tags(tag_id, tags(id, name))').eq('user_id', userId)
+    // count: 'exact' asks PostgREST to return the total row count alongside data
+    // so hasMore can be derived without a separate COUNT query. (data-pagination)
+    let query = supabase
+      .from('notes')
+      .select('*, note_tags(tag_id, tags(id, name))', { count: 'exact' })
+      .eq('user_id', userId)
     if (tab === 'archive') {
       query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
     } else {
@@ -46,11 +64,20 @@ export function useNotes(userId, tab = 'active', search = '') {
         query = query.textSearch('search_vector', search, { type: 'websearch', config: 'english' })
       }
     }
-    const { data, error } = await query
+    // Paginate only when not searching — search returns all matching rows at once.
+    // Offset pagination is appropriate at personal-notes scale. (data-pagination)
+    if (!search) {
+      query = query.range(0, PAGE_SIZE - 1)
+    }
+    const { data, error, count } = await query
     if (error) {
       setError(error.message)
     } else {
       setNotes(data)
+      setTotalCount(count)
+      // For search: all results are in data, advance offset past the full set so
+      // hasMore stays false. For normal fetch: advance by PAGE_SIZE.
+      setNextOffset(search ? (data?.length ?? 0) : PAGE_SIZE)
     }
     setLoading(false)
   }, [userId, tab, search])
@@ -58,6 +85,38 @@ export function useNotes(userId, tab = 'active', search = '') {
   useEffect(() => {
     fetchNotes()
   }, [fetchNotes])
+
+  /**
+   * Fetches the next page and appends it to the existing list.
+   * Only callable when hasMore is true; never called during a search.
+   */
+  const loadMore = useCallback(async () => {
+    if (!userId) return
+    setLoadingMore(true)
+    setError(null)
+    let query = supabase
+      .from('notes')
+      .select('*, note_tags(tag_id, tags(id, name))', { count: 'exact' })
+      .eq('user_id', userId)
+    if (tab === 'archive') {
+      query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
+    } else {
+      query = query
+        .is('archived_at', null)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+    }
+    query = query.range(nextOffset, nextOffset + PAGE_SIZE - 1)
+    const { data, error, count } = await query
+    if (error) {
+      setError(error.message)
+    } else {
+      setNotes(prev => [...prev, ...data])  // append — functional update (rerender-functional-setstate)
+      setTotalCount(count)
+      setNextOffset(prev => prev + PAGE_SIZE)
+    }
+    setLoadingMore(false)
+  }, [userId, tab, nextOffset])
 
   /**
    * @param {string} userId
@@ -202,5 +261,5 @@ export function useNotes(userId, tab = 'active', search = '') {
     )
   }, [])
 
-  return { notes, loading, error, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags }
+  return { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags }
 }
