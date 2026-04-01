@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNotes } from '../hooks/useNotes'
 import { useProfile } from '../hooks/useProfile'
+import { useTags } from '../hooks/useTags'
 import ThemeToggle from './ThemeToggle'
 import NoteEditor from './NoteEditor'
 import ProfileEditor from './ProfileEditor'
@@ -26,20 +27,24 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const [view, setView] = useState('list')
   const tab = view === 'archive' ? 'archive' : 'active'
 
-  const { notes, loading, error, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote } = useNotes(userId, tab)
+  const { notes, loading, error, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab)
   const { fullName, updateFullName } = useProfile(userId)
+  const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [activeTagId, setActiveTagId] = useState(null)
 
-  async function handleSave({ title, content }) {
+  async function handleSave({ title, content, tagIds }) {
     setSaving(true)
     setSaveError(null)
     try {
       if (editingNote !== null) {
         await updateNote(editingNote.id, { title, content })
+        await updateNoteTags(editingNote.id, tagIds, tags)
       } else {
-        await createNote(userId, { title, content })
+        const newId = await createNote(userId, { title, content })
+        await updateNoteTags(newId, tagIds, tags)
       }
       setEditingNote(null)
       setView('list')
@@ -94,6 +99,11 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     setView('list')
   }
 
+  function handleTagClick(tagId) {
+    // Toggle: clicking the active tag clears the filter
+    setActiveTagId(prev => (prev === tagId ? null : tagId))
+  }
+
   async function handleProfileSave(name) {
     setSaving(true)
     setSaveError(null)
@@ -110,6 +120,10 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   // Derived during render — which overlay is active (rerender-derived-state-no-effect)
   const showEditor = view === 'compose' || view === 'edit'
   const showProfile = view === 'profile'
+  // Client-side tag filter — applied after fetch (small personal dataset)
+  const displayedNotes = activeTagId !== null
+    ? notes.filter(n => n.note_tags?.some(nt => nt.tag_id === activeTagId))
+    : notes
 
   return (
     <div className="notes-layout">
@@ -148,6 +162,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
             onSave={handleSave}
             onCancel={handleCancel}
             saving={saving}
+            allTags={tags}
+            onCreateTag={createTag}
           />
         ) : showProfile ? (
           <ProfileEditor
@@ -185,14 +201,25 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                     ? `${notes.length} archived`
                     : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
               </h2>
-              {tab === 'active' ? (
-                <button
-                  type="button"
-                  onClick={() => { setSaveError(null); setView('compose') }}
-                >
-                  + New note
-                </button>
-              ) : null}
+              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                {activeTagId !== null ? (
+                  <button
+                    type="button"
+                    className="tag-filter-chip"
+                    onClick={() => setActiveTagId(null)}
+                  >
+                    {tags.find(t => t.id === activeTagId)?.name} ×
+                  </button>
+                ) : null}
+                {tab === 'active' ? (
+                  <button
+                    type="button"
+                    onClick={() => { setSaveError(null); setView('compose') }}
+                  >
+                    + New note
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {notes.length === 0 ? (
@@ -203,7 +230,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               </p>
             ) : (
               <div className="notes-grid">
-                {notes.map(note => (
+                {displayedNotes.map(note => (
                   <NoteCard
                     key={note.id}
                     note={note}
@@ -213,6 +240,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                     onArchive={handleArchive}
                     onUnarchive={handleUnarchive}
                     onDeletePermanent={handleDelete}
+                    onTagClick={handleTagClick}
                   />
                 ))}
               </div>

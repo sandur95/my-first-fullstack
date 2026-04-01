@@ -14,16 +14,31 @@
  *   onPin: Function,
  *   onArchive: Function,
  *   onUnarchive: Function,
- *   onDeletePermanent: Function
+ *   onDeletePermanent: Function,
+ *   onTagClick: Function
  * }} props
  */
-export default function NoteCard({ note, isArchived, onEdit, onPin, onArchive, onUnarchive, onDeletePermanent }) {
+export default function NoteCard({ note, isArchived, onEdit, onPin, onArchive, onUnarchive, onDeletePermanent, onTagClick }) {
   return (
     <article className={`note-card${note.pinned && !isArchived ? ' note-card--pinned' : ''}`}>
       <div className="note-card-body">
         <h3 className="note-card-title">{note.title}</h3>
         {note.content !== null ? (
           <p className="note-card-content">{note.content}</p>
+        ) : null}
+        {note.note_tags && note.note_tags.length > 0 ? (
+          <div className="note-card-tags">
+            {note.note_tags.map(nt => (
+              <button
+                key={nt.tag_id}
+                type="button"
+                className="tag-pill"
+                onClick={() => onTagClick(nt.tag_id)}
+              >
+                {nt.tags.name}
+              </button>
+            ))}
+          </div>
         ) : null}
       </div>
       <footer className="note-card-footer">

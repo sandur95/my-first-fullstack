@@ -285,6 +285,93 @@ button:disabled {
 }
 
 /* ---------------------------------------------------------------------------
+   Tag pills — used in NoteCard and NoteEditor
+   --------------------------------------------------------------------------- */
+.note-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  margin-top: .375rem;
+}
+
+.tag-pill {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: .6875rem;
+  padding: .125rem .5rem;
+  cursor: pointer;
+  opacity: .85;
+  transition: opacity .15s;
+}
+.tag-pill:hover {
+  opacity: 1;
+}
+
+/* Selected-tag pill inside the editor — muted style with × to remove */
+.tag-pill--remove {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  opacity: 1;
+}
+.tag-pill--remove:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Tag input + dropdown container */
+.tag-input-wrap {
+  position: relative;
+}
+
+.tag-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-height: 10rem;
+  overflow-y: auto;
+}
+.tag-dropdown button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: .375rem .75rem;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: .875rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.tag-dropdown button:hover {
+  background: var(--bg);
+}
+
+/* Active tag filter chip shown in notes-list-header */
+.tag-filter-chip {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  font-size: .75rem;
+  padding: .1875rem .625rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.tag-filter-chip:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------------------
    Note editor form
    --------------------------------------------------------------------------- */
 .note-editor {

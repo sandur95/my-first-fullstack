@@ -134,3 +134,38 @@ insert into public.notes (user_id, title, content, created_at, updated_at) value
     now() - interval '2 hours',
     now() - interval '2 hours'
   );
+
+-- ---------------------------------------------------------------------------
+-- 4. Tags — batch insert one row per tag per user (data-batch-inserts)
+-- ---------------------------------------------------------------------------
+insert into public.tags (user_id, name, created_at) values
+  ('00000000-0000-0000-0000-000000000001', 'learning', now()),
+  ('00000000-0000-0000-0000-000000000001', 'postgres',  now()),
+  ('00000000-0000-0000-0000-000000000001', 'work',      now()),
+  ('00000000-0000-0000-0000-000000000002', 'react',     now()),
+  ('00000000-0000-0000-0000-000000000002', 'tooling',   now()),
+  ('00000000-0000-0000-0000-000000000003', 'ideas',     now()),
+  ('00000000-0000-0000-0000-000000000003', 'meetings',  now())
+on conflict (user_id, name) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- 5. Note tags — link sample notes to tags via JOIN (avoids hardcoded IDs)
+-- ---------------------------------------------------------------------------
+insert into public.note_tags (note_id, tag_id)
+select n.id, t.id
+from (values
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'Getting started with Supabase', '00000000-0000-0000-0000-000000000001'::uuid, 'learning'),
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'Getting started with Supabase', '00000000-0000-0000-0000-000000000001'::uuid, 'postgres'),
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'Postgres tips',                 '00000000-0000-0000-0000-000000000001'::uuid, 'postgres'),
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'Postgres tips',                 '00000000-0000-0000-0000-000000000001'::uuid, 'learning'),
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'RLS checklist',                 '00000000-0000-0000-0000-000000000001'::uuid, 'work'),
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'RLS checklist',                 '00000000-0000-0000-0000-000000000001'::uuid, 'postgres'),
+  ('00000000-0000-0000-0000-000000000002'::uuid, 'React query patterns',          '00000000-0000-0000-0000-000000000002'::uuid, 'react'),
+  ('00000000-0000-0000-0000-000000000002'::uuid, 'Vite config reminder',          '00000000-0000-0000-0000-000000000002'::uuid, 'tooling'),
+  ('00000000-0000-0000-0000-000000000002'::uuid, 'Vite config reminder',          '00000000-0000-0000-0000-000000000002'::uuid, 'react'),
+  ('00000000-0000-0000-0000-000000000003'::uuid, 'Meeting agenda 2026-03-30',     '00000000-0000-0000-0000-000000000003'::uuid, 'meetings'),
+  ('00000000-0000-0000-0000-000000000003'::uuid, 'Ideas backlog',                 '00000000-0000-0000-0000-000000000003'::uuid, 'ideas')
+) as mapping (note_uid, note_title, tag_uid, tag_name)
+join public.notes n on n.user_id = mapping.note_uid and n.title = mapping.note_title
+join public.tags  t on t.user_id = mapping.tag_uid  and t.name  = mapping.tag_name
+on conflict (note_id, tag_id) do nothing;

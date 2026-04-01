@@ -28,7 +28,7 @@ export function useNotes(userId, tab = 'active') {
     // Active:  WHERE archived_at IS NULL   → notes_active_user_pinned_created_idx
     // Archive: WHERE archived_at IS NOT NULL → notes_archived_user_created_idx
     // (query-partial-indexes)
-    let query = supabase.from('notes').select('*').eq('user_id', userId)
+    let query = supabase.from('notes').select('*, note_tags(tag_id, tags(id, name))').eq('user_id', userId)
     if (tab === 'archive') {
       query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
     } else {
@@ -64,12 +64,13 @@ export function useNotes(userId, tab = 'active') {
     if (error) throw error
     // Prepend to list — functional update, no stale closure risk
     setNotes(prev =>
-      [data, ...prev].toSorted(
+      [{ ...data, note_tags: [] }, ...prev].toSorted(
         (a, b) =>
           b.pinned - a.pinned ||
           new Date(b.created_at) - new Date(a.created_at)
       )
     )
+    return data.id
   }, [])
 
   /**
@@ -85,8 +86,8 @@ export function useNotes(userId, tab = 'active') {
       .select()
       .single()
     if (error) throw error
-    // Replace the updated note in the list — functional update
-    setNotes(prev => prev.map(n => (n.id === id ? data : n)))
+    // Preserve existing note_tags — update only changed title/content
+    setNotes(prev => prev.map(n => (n.id === id ? { ...data, note_tags: n.note_tags } : n)))
   }, [])
 
   /**
@@ -103,11 +104,12 @@ export function useNotes(userId, tab = 'active') {
       .single()
     if (error) throw error
     // Update in-place then re-sort: pinned DESC, created_at DESC.
+    // Preserve existing note_tags — pin toggle does not affect tags.
     // toSorted() returns a new array (immutable) — no stale closure risk.
     // (rerender-functional-setstate, js-tosorted-immutable)
     setNotes(prev =>
       prev
-        .map(n => (n.id === id ? data : n))
+        .map(n => (n.id === id ? { ...data, note_tags: n.note_tags } : n))
         .toSorted(
           (a, b) =>
             b.pinned - a.pinned ||
@@ -159,5 +161,37 @@ export function useNotes(userId, tab = 'active') {
     setNotes(prev => prev.filter(n => n.id !== id))
   }, [])
 
-  return { notes, loading, error, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote }
+  /**
+   * Replaces all tag associations for a note (delete-then-insert).
+   * Updates local state immediately without a refetch.
+   * (rerender-functional-setstate)
+   *
+   * @param {number} noteId
+   * @param {number[]} tagIds
+   * @param {import('../lib/database.types').Tag[]} allTags
+   * @returns {Promise<void>}
+   */
+  const updateNoteTags = useCallback(async (noteId, tagIds, allTags) => {
+    const { error: delError } = await supabase
+      .from('note_tags')
+      .delete()
+      .eq('note_id', noteId)
+    if (delError) throw delError
+    if (tagIds.length > 0) {
+      const { error: insError } = await supabase
+        .from('note_tags')
+        .insert(tagIds.map(tid => ({ note_id: noteId, tag_id: tid })))
+      if (insError) throw insError
+    }
+    const tagMap = new Map(allTags.map(t => [t.id, t]))
+    setNotes(prev =>
+      prev.map(n =>
+        n.id === noteId
+          ? { ...n, note_tags: tagIds.map(tid => ({ tag_id: tid, tags: tagMap.get(tid) })) }
+          : n
+      )
+    )
+  }, [])
+
+  return { notes, loading, error, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags }
 }

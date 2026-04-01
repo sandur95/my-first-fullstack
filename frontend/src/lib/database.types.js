@@ -33,6 +33,27 @@
  * @property {string|null} archived_at - NULL = active. ISO 8601 timestamptz when archived.
  * @property {string}      created_at  - ISO 8601 with timezone (timestamptz)
  * @property {string}      updated_at  - ISO 8601 with timezone (timestamptz)
+ * @property {NoteTag[]}   [note_tags] - Joined tag associations (present when fetched with nested select)
+ */
+
+/**
+ * A row in public.tags.
+ *
+ * @typedef {Object} Tag
+ * @property {number} id         - bigint identity primary key
+ * @property {string} user_id    - UUID FK → public.users.id
+ * @property {string} name
+ * @property {string} created_at - ISO 8601 with timezone (timestamptz)
+ */
+
+/**
+ * A row in public.note_tags (join table).
+ * When fetched via nested select the `tags` field contains the related Tag row.
+ *
+ * @typedef {Object} NoteTag
+ * @property {number} note_id
+ * @property {number} tag_id
+ * @property {Tag}    tags    - Nested Tag row from Supabase nested select
  */
 
 // This module exports no runtime values — types are consumed via JSDoc only.
