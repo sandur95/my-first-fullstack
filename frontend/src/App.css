@@ -257,6 +257,34 @@ button:disabled {
 }
 
 /* ---------------------------------------------------------------------------
+   Active / Archived tab bar
+   --------------------------------------------------------------------------- */
+.notes-tab-bar {
+  display: flex;
+  gap: .375rem;
+}
+
+.notes-tab {
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: .8125rem;
+  font-weight: 500;
+  padding: .3125rem .875rem;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.notes-tab:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+.notes-tab--active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* ---------------------------------------------------------------------------
    Note editor form
    --------------------------------------------------------------------------- */
 .note-editor {

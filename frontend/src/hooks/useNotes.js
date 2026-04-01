@@ -4,15 +4,15 @@ import { supabase } from '../lib/supabase'
 /**
  * Manages the notes list for the authenticated user.
  *
- * All mutation callbacks (createNote, updateNote, deleteNote) use the
- * functional form of setNotes — `setNotes(prev => ...)` — so they never
- * close over a stale `notes` value and can be wrapped in useCallback with
- * an empty dependency array. This keeps their references stable and prevents
- * unnecessary child re-renders. (rerender-functional-setstate)
+ * All mutation callbacks use the functional form of setNotes — `setNotes(prev => ...)` —
+ * so they never close over a stale `notes` value and can be wrapped in useCallback with
+ * an empty dependency array. This keeps their references stable and prevents unnecessary
+ * child re-renders. (rerender-functional-setstate)
  *
  * @param {string|null} userId - The authenticated user's UUID
+ * @param {'active'|'archive'} [tab='active'] - Which set of notes to load
  */
-export function useNotes(userId) {
+export function useNotes(userId, tab = 'active') {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -24,19 +24,27 @@ export function useNotes(userId) {
     }
     setLoading(true)
     setError(null)
-    const { data, error } = await supabase
-      .from('notes')
-      .select('*')
-      .eq('user_id', userId)
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
+    // Branch query by tab so each path matches its partial index exactly.
+    // Active:  WHERE archived_at IS NULL   → notes_active_user_pinned_created_idx
+    // Archive: WHERE archived_at IS NOT NULL → notes_archived_user_created_idx
+    // (query-partial-indexes)
+    let query = supabase.from('notes').select('*').eq('user_id', userId)
+    if (tab === 'archive') {
+      query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
+    } else {
+      query = query
+        .is('archived_at', null)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+    }
+    const { data, error } = await query
     if (error) {
       setError(error.message)
     } else {
       setNotes(data)
     }
     setLoading(false)
-  }, [userId])
+  }, [userId, tab])
 
   useEffect(() => {
     fetchNotes()
@@ -119,5 +127,37 @@ export function useNotes(userId) {
     setNotes(prev => prev.filter(n => n.id !== id))
   }, [])
 
-  return { notes, loading, error, createNote, updateNote, deleteNote, pinNote }
+  /**
+   * Soft-deletes a note by setting archived_at to now().
+   * Removes it from the active list immediately. (rerender-functional-setstate)
+   *
+   * @param {number} id
+   * @returns {Promise<void>}
+   */
+  const archiveNote = useCallback(async (id) => {
+    const { error } = await supabase
+      .from('notes')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) throw error
+    setNotes(prev => prev.filter(n => n.id !== id))
+  }, [])
+
+  /**
+   * Restores a note by setting archived_at back to null.
+   * Removes it from the archive list immediately. (rerender-functional-setstate)
+   *
+   * @param {number} id
+   * @returns {Promise<void>}
+   */
+  const unarchiveNote = useCallback(async (id) => {
+    const { error } = await supabase
+      .from('notes')
+      .update({ archived_at: null })
+      .eq('id', id)
+    if (error) throw error
+    setNotes(prev => prev.filter(n => n.id !== id))
+  }, [])
+
+  return { notes, loading, error, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote }
 }
