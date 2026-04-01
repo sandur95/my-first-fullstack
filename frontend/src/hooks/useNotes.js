@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const PAGE_SIZE = 10
@@ -29,6 +29,15 @@ export function useNotes(userId, tab = 'active', search = '') {
   // the number of rows we have loaded so far. Search always returns all matches
   // at once so hasMore stays false during a search. (data-pagination)
   const hasMore = !search && totalCount !== null && nextOffset < totalCount
+
+  // Refs for the Realtime handler — lets the handler read current tab/search values
+  // without being listed as effect dependencies. This prevents the subscription from
+  // being torn down and recreated on every tab switch or keypress.
+  // (rerender-use-ref-transient-values)
+  const tabRef = useRef(tab)
+  const searchRef = useRef(search)
+  useEffect(() => { tabRef.current = tab }, [tab])
+  useEffect(() => { searchRef.current = search }, [search])
 
   const fetchNotes = useCallback(async () => {
     if (!userId) {
@@ -85,6 +94,71 @@ export function useNotes(userId, tab = 'active', search = '') {
   useEffect(() => {
     fetchNotes()
   }, [fetchNotes])
+
+  // Realtime subscription — applies INSERT/UPDATE/DELETE events from other browser
+  // tabs directly to local state without refetching the whole list.
+  // One channel per userId covers all tabs; tabRef/searchRef let the handler read
+  // the current tab and search term without being listed as effect dependencies,
+  // so the WebSocket channel is only (re)created when the user logs in or out.
+  // (rerender-use-ref-transient-values, rerender-functional-setstate)
+  useEffect(() => {
+    if (!userId) return
+
+    const channel = supabase
+      .channel(`notes:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notes',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const currentTab = tabRef.current
+
+          if (payload.eventType === 'INSERT') {
+            setNotes(prev => {
+              // Deduplicate: createNote() already inserted the row optimistically
+              if (prev.some(n => n.id === payload.new.id)) return prev
+              // Skip inserts while searching — can't validate the note against
+              // the current FTS query client-side; user will see it on clear.
+              if (searchRef.current) return prev
+              // New notes always have archived_at IS NULL → active tab only
+              if (currentTab !== 'active') return prev
+              return [{ ...payload.new, note_tags: [] }, ...prev]
+                .toSorted((a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at))
+            })
+          } else if (payload.eventType === 'UPDATE') {
+            setNotes(prev => {
+              // Ignore if the note isn't in the current list
+              if (!prev.some(n => n.id === payload.new.id)) return prev
+              const updated = payload.new
+              // Note moved out of the current tab — remove it
+              if (currentTab === 'active' && updated.archived_at !== null) {
+                return prev.filter(n => n.id !== updated.id)
+              }
+              if (currentTab === 'archive' && updated.archived_at === null) {
+                return prev.filter(n => n.id !== updated.id)
+              }
+              // Update in-place, preserving note_tags (not in the Realtime payload)
+              const sort = currentTab === 'archive'
+                ? (a, b) => new Date(b.archived_at) - new Date(a.archived_at)
+                : (a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at)
+              return prev
+                .map(n => n.id === updated.id ? { ...updated, note_tags: n.note_tags } : n)
+                .toSorted(sort)
+            })
+          } else if (payload.eventType === 'DELETE') {
+            // payload.old contains only the PK (id) without REPLICA IDENTITY FULL
+            setNotes(prev => prev.filter(n => n.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [userId])
 
   /**
    * Fetches the next page and appends it to the existing list.
