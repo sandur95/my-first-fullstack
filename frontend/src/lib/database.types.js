@@ -29,6 +29,7 @@
  * @property {string}      user_id    - UUID FK → public.users.id
  * @property {string}      title
  * @property {string|null} content
+ * @property {boolean}     pinned     - When true, note is displayed before unpinned notes
  * @property {string}      created_at - ISO 8601 with timezone (timestamptz)
  * @property {string}      updated_at - ISO 8601 with timezone (timestamptz)
  */

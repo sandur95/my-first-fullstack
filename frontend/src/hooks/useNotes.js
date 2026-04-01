@@ -28,6 +28,7 @@ export function useNotes(userId) {
       .from('notes')
       .select('*')
       .eq('user_id', userId)
+      .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
     if (error) {
       setError(error.message)
@@ -54,7 +55,13 @@ export function useNotes(userId) {
       .single()
     if (error) throw error
     // Prepend to list — functional update, no stale closure risk
-    setNotes(prev => [data, ...prev])
+    setNotes(prev =>
+      [data, ...prev].toSorted(
+        (a, b) =>
+          b.pinned - a.pinned ||
+          new Date(b.created_at) - new Date(a.created_at)
+      )
+    )
   }, [])
 
   /**
@@ -76,6 +83,33 @@ export function useNotes(userId) {
 
   /**
    * @param {number} id
+   * @param {boolean} currentPinned - current value of note.pinned
+   * @returns {Promise<void>}
+   */
+  const pinNote = useCallback(async (id, currentPinned) => {
+    const { data, error } = await supabase
+      .from('notes')
+      .update({ pinned: !currentPinned })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    // Update in-place then re-sort: pinned DESC, created_at DESC.
+    // toSorted() returns a new array (immutable) — no stale closure risk.
+    // (rerender-functional-setstate, js-tosorted-immutable)
+    setNotes(prev =>
+      prev
+        .map(n => (n.id === id ? data : n))
+        .toSorted(
+          (a, b) =>
+            b.pinned - a.pinned ||
+            new Date(b.created_at) - new Date(a.created_at)
+        )
+    )
+  }, [])
+
+  /**
+   * @param {number} id
    * @returns {Promise<void>}
    */
   const deleteNote = useCallback(async (id) => {
@@ -85,5 +119,5 @@ export function useNotes(userId) {
     setNotes(prev => prev.filter(n => n.id !== id))
   }, [])
 
-  return { notes, loading, error, createNote, updateNote, deleteNote }
+  return { notes, loading, error, createNote, updateNote, deleteNote, pinNote }
 }

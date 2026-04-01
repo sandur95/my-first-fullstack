@@ -81,6 +81,7 @@ button:disabled {
 .notes-header,
 .notes-layout,
 .note-card,
+.note-card--pinned,
 .note-editor,
 .form-error,
 .form-message {
@@ -332,6 +333,11 @@ button:disabled {
   box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
 
+/* Pinned state — accent left border using the primary colour variable */
+.note-card--pinned {
+  border-left: 3px solid var(--primary);
+}
+
 .note-card-body {
   flex: 1;
 }
@@ -372,6 +378,21 @@ button:disabled {
 .note-card-actions button {
   font-size: .75rem;
   padding: .25rem .625rem;
+}
+
+/* Pin toggle button — inherits size from .note-card-actions button above */
+.note-card-pin {
+  font-size: .8125rem;  /* slightly larger so the emoji is legible */
+  opacity: .45;
+  transition: opacity .15s, color .15s, border-color .15s;
+}
+.note-card-pin:hover {
+  opacity: .75;
+}
+.note-card-pin--active {
+  color: var(--primary);
+  border-color: var(--primary);
+  opacity: 1;
 }
 
 /* ---------------------------------------------------------------------------

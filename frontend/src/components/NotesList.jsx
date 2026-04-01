@@ -19,7 +19,7 @@ import NoteCard from './NoteCard'
  * @param {{ userId: string, userEmail: string, onSignOut: Function }} props
  */
 export default function NotesList({ userId, userEmail, onSignOut }) {
-  const { notes, loading, error, createNote, updateNote, deleteNote } = useNotes(userId)
+  const { notes, loading, error, createNote, updateNote, deleteNote, pinNote } = useNotes(userId)
   // 'list' | 'compose' | 'edit'
   const [view, setView] = useState('list')
   const [editingNote, setEditingNote] = useState(null)
@@ -47,6 +47,14 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   async function handleDelete(id) {
     try {
       await deleteNote(id)
+    } catch (err) {
+      setSaveError(err.message)
+    }
+  }
+
+  async function handlePin(id, currentPinned) {
+    try {
+      await pinNote(id, currentPinned)
     } catch (err) {
       setSaveError(err.message)
     }
@@ -124,6 +132,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                     note={note}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onPin={handlePin}
                   />
                 ))}
               </div>
