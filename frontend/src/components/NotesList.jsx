@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNotes } from '../hooks/useNotes'
+import { useProfile } from '../hooks/useProfile'
 import ThemeToggle from './ThemeToggle'
 import NoteEditor from './NoteEditor'
+import ProfileEditor from './ProfileEditor'
 import NoteCard from './NoteCard'
 
 /**
@@ -20,7 +22,8 @@ import NoteCard from './NoteCard'
  */
 export default function NotesList({ userId, userEmail, onSignOut }) {
   const { notes, loading, error, createNote, updateNote, deleteNote, pinNote } = useNotes(userId)
-  // 'list' | 'compose' | 'edit'
+  const { fullName, updateFullName } = useProfile(userId)
+  // 'list' | 'compose' | 'edit' | 'profile'
   const [view, setView] = useState('list')
   const [editingNote, setEditingNote] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -72,16 +75,39 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     setView('list')
   }
 
+  async function handleProfileSave(name) {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await updateFullName(name)
+      setView('list')
+    } catch (err) {
+      setSaveError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // Derived during render — which view is active (rerender-derived-state-no-effect)
   const showEditor = view === 'compose' || view === 'edit'
+  const showProfile = view === 'profile'
 
   return (
     <div className="notes-layout">
       <header className="notes-header">
         <span className="notes-logo">Notes</span>
         <div className="notes-header-right">
-          <span className="notes-user-email">{userEmail}</span>
+          <span className="notes-user-email">
+            {fullName !== null ? fullName : userEmail}
+          </span>
           <ThemeToggle />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => { setSaveError(null); setEditingNote(null); setView('profile') }}
+          >
+            Profile
+          </button>
           <button type="button" className="btn-secondary" onClick={onSignOut}>
             Sign out
           </button>
@@ -101,6 +127,13 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
           <NoteEditor
             editingNote={editingNote}
             onSave={handleSave}
+            onCancel={handleCancel}
+            saving={saving}
+          />
+        ) : showProfile ? (
+          <ProfileEditor
+            fullName={fullName}
+            onSave={handleProfileSave}
             onCancel={handleCancel}
             saving={saving}
           />
