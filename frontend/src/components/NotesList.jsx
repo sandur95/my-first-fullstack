@@ -6,6 +6,7 @@ import ThemeToggle from './ThemeToggle'
 import NoteEditor from './NoteEditor'
 import ProfileEditor from './ProfileEditor'
 import NoteCard from './NoteCard'
+import AvatarBubble from './AvatarBubble'
 
 /**
  * Authenticated main view — composites NoteEditor + NoteCard list.
@@ -37,7 +38,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const [isPending, startTransition] = useTransition()
 
   const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags, fetchNotes } = useNotes(userId, tab, debouncedSearch)
-  const { fullName, updateFullName } = useProfile(userId)
+  const { fullName, avatarUrl, isUploading, uploadAvatar, updateFullName } = useProfile(userId)
   const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -154,17 +155,19 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
       <header className="notes-header">
         <span className="notes-logo">Notes</span>
         <div className="notes-header-right">
-          <span className="notes-user-email">
-            {fullName !== null ? fullName : userEmail}
-          </span>
-          <ThemeToggle />
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-avatar-profile"
             onClick={() => { setSaveError(null); setEditingNote(null); setView('profile') }}
+            title="Edit profile"
+            aria-label="Edit profile"
           >
-            Profile
+            <AvatarBubble avatarUrl={avatarUrl} displayName={fullName ?? userEmail} size={20} />
+            <span className="notes-user-email">
+              {fullName !== null ? fullName : userEmail}
+            </span>
           </button>
+          <ThemeToggle />
           <button type="button" className="btn-secondary" onClick={onSignOut}>
             Sign out
           </button>
@@ -192,7 +195,10 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
         ) : showProfile ? (
           <ProfileEditor
             fullName={fullName}
+            avatarUrl={avatarUrl}
+            isUploading={isUploading}
             onSave={handleProfileSave}
+            onUploadAvatar={uploadAvatar}
             onCancel={handleCancel}
             saving={saving}
           />

@@ -19,12 +19,12 @@ button {
 }
 
 button[type="submit"],
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear) {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile) {
   background: var(--primary);
   color: #fff;
 }
 button[type="submit"]:hover,
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):hover {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile):hover {
   background: var(--primary-hover);
 }
 button:disabled {
@@ -223,6 +223,26 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: .75rem;
+}
+
+/* Align the three interactive controls in the header to the same height.
+   box-sizing: border-box so border + padding are included in the 2.25rem.
+   inline-flex + align/justify center keeps each control's content centred. */
+.notes-header-right .btn-secondary,
+.notes-header-right .btn-theme,
+.notes-header-right .btn-avatar-profile {
+  height: 2.25rem;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Theme toggle is a square icon button in the header */
+.notes-header-right .btn-theme {
+  width: 2.25rem;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .notes-user-email {
@@ -609,4 +629,107 @@ button:disabled {
   z-index: 100;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Avatar — shared between header bubble and profile editor
+   --------------------------------------------------------------------------- */
+@keyframes avatar-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Circular image — used by AvatarBubble when avatarUrl is set */
+.avatar-bubble-img {
+  display: block;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Initials fallback — used by AvatarBubble when no avatarUrl exists */
+.avatar-bubble-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: .625rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Button that groups the avatar circle + user name in the header.
+   No background or border by default; on hover shows only a shadow,
+   matching the .btn-secondary hover effect. */
+.btn-avatar-profile {
+  background: none;
+  border: none;
+  padding: .5rem .75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  border-radius: var(--radius);
+}
+.btn-avatar-profile:hover {
+  box-shadow: var(--shadow);
+}
+
+/* ---------------------------------------------------------------------------
+   Avatar upload widget — inside ProfileEditor
+   --------------------------------------------------------------------------- */
+
+/* Wrapper that positions the overlay and camera icon relative to the avatar */
+.avatar-upload-wrapper {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+/* Camera icon overlay — hidden by default, fades in on hover when not uploading */
+.avatar-camera-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .5);
+  color: #fff;
+  font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.avatar-upload-wrapper:hover .avatar-camera-overlay {
+  opacity: 1;
+}
+
+/* Spinner overlay — shown during upload; replaces the camera overlay */
+.avatar-spinner-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* CSS border spinner */
+.avatar-spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgba(255, 255, 255, .3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: avatar-spin .8s linear infinite;
+}
+
+/* Large avatar circle shown inside ProfileEditor (80 × 80) */
+.avatar-editor-circle {
+  width: 80px;
+  height: 80px;
 }

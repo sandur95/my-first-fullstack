@@ -14,11 +14,14 @@
  * handle_new_auth_user trigger on sign-up.
  *
  * @typedef {Object} User
- * @property {string}      id         - UUID, mirrors auth.users.id
+ * @property {string}      id          - UUID, mirrors auth.users.id
  * @property {string}      email
  * @property {string|null} full_name
- * @property {string}      created_at - ISO 8601 with timezone (timestamptz)
- * @property {string}      updated_at - ISO 8601 with timezone (timestamptz)
+ * @property {string|null} avatar_path - Relative path in the private "avatars" storage bucket.
+ *                                       NULL = no avatar uploaded. e.g. '<user_id>/avatar.png'.
+ *                                       Never store signed URLs here — generate them at display time.
+ * @property {string}      created_at  - ISO 8601 with timezone (timestamptz)
+ * @property {string}      updated_at  - ISO 8601 with timezone (timestamptz)
  */
 
 /**
