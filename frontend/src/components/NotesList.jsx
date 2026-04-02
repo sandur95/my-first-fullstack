@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useNotes } from '../hooks/useNotes'
 import { useProfile } from '../hooks/useProfile'
 import { useTags } from '../hooks/useTags'
@@ -65,43 +65,50 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     }
   }
 
-  async function handleDelete(id) {
+  const handleDelete = useCallback(async (id) => {
     try {
       await deleteNote(id)
     } catch (err) {
       setSaveError(err.message)
     }
-  }
+  }, [deleteNote])
 
-  async function handleArchive(id) {
+  // showToast defined before the handlers that depend on it
+  const showToast = useCallback((message) => {
+    clearTimeout(toastTimeoutRef.current)
+    setToastMessage(message)
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 3000)
+  }, [])
+
+  const handleArchive = useCallback(async (id) => {
     try {
       await archiveNote(id)
     } catch (err) {
       showToast(err.message)
     }
-  }
+  }, [archiveNote, showToast])
 
-  async function handleUnarchive(id) {
+  const handleUnarchive = useCallback(async (id) => {
     try {
       await unarchiveNote(id)
     } catch (err) {
       showToast(err.message)
     }
-  }
+  }, [unarchiveNote, showToast])
 
-  async function handlePin(id, currentPinned) {
+  const handlePin = useCallback(async (id, currentPinned) => {
     try {
       await pinNote(id, currentPinned)
     } catch (err) {
       showToast(err.message)
     }
-  }
+  }, [pinNote, showToast])
 
-  function handleEdit(note) {
+  const handleEdit = useCallback((note) => {
     setEditingNote(note)
     setSaveError(null)
     setView('edit')
-  }
+  }, [])
 
   function handleCancel() {
     setEditingNote(null)
@@ -109,21 +116,15 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     setView('list')
   }
 
-  function handleTagClick(tagId) {
+  const handleTagClick = useCallback((tagId) => {
     // Toggle: clicking the active tag clears the filter
     setActiveTagId(prev => (prev === tagId ? null : tagId))
-  }
+  }, [])
 
   function clearSearch() {
     clearTimeout(debounceRef.current)
     setSearchInput('')
     setDebouncedSearch('')
-  }
-
-  function showToast(message) {
-    clearTimeout(toastTimeoutRef.current)
-    setToastMessage(message)
-    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 3000)
   }
 
   async function handleProfileSave(name) {

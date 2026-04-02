@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 /**
  * Displays a single note with context-appropriate actions.
  *
@@ -18,7 +20,7 @@
  *   onTagClick: Function
  * }} props
  */
-export default function NoteCard({ note, isArchived, onEdit, onPin, onArchive, onUnarchive, onDeletePermanent, onTagClick }) {
+export default memo(function NoteCard({ note, isArchived, onEdit, onPin, onArchive, onUnarchive, onDeletePermanent, onTagClick }) {
   return (
     <article className={`note-card${note.pinned && !isArchived ? ' note-card--pinned' : ''}`}>
       <div className="note-card-body">
@@ -93,4 +95,4 @@ export default function NoteCard({ note, isArchived, onEdit, onPin, onArchive, o
       </footer>
     </article>
   )
-}
+})
