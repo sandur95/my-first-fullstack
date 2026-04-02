@@ -36,16 +36,35 @@ export function useNotes(userId, tab = 'active', search = '') {
   // (rerender-use-ref-transient-values)
   const tabRef = useRef(tab)
   const searchRef = useRef(search)
+  // Tracks which tab was fetched manually inside a startTransition, so the
+  // auto-fetch effect can skip the redundant re-fetch after the transition commits.
+  // (rendering-usetransition-loading)
+  const transitionFetchedRef = useRef(null)
   useEffect(() => { tabRef.current = tab }, [tab])
   useEffect(() => { searchRef.current = search }, [search])
 
-  const fetchNotes = useCallback(async () => {
+  const fetchNotes = useCallback(async (tabOverride) => {
+    // When called with an explicit tab (from a startTransition), record it so the
+    // auto-fetch effect skips the redundant re-fetch after the transition commits.
+    // Only set when actually switching tabs to avoid stale-skip bugs.
+    // (rendering-usetransition-loading)
+    if (tabOverride !== undefined && tabOverride !== tab) {
+      transitionFetchedRef.current = tabOverride
+    }
     if (!userId) {
       setNotes([])
       setTotalCount(null)
       return
     }
+    const effectiveTab = tabOverride ?? tab
+    // Archive never uses the search term (the GIN index is partial on archived_at IS NULL).
+    const effectiveSearch = effectiveTab === 'archive' ? '' : search
     setLoading(true)
+    // Clear notes only for non-transition fetches (initial load, search change) so the
+    // loading guard in NotesList shows "Loading…" instead of stale content.
+    // Transition fetches keep old notes visible (dimmed via isPending) until the new
+    // ones arrive — no empty intermediate state. (rendering-usetransition-loading)
+    if (tabOverride === undefined) setNotes([])
     setError(null)
     // Branch query by tab so each path matches its partial index exactly.
     // Active:  WHERE archived_at IS NULL   → notes_active_user_pinned_created_idx
@@ -57,7 +76,7 @@ export function useNotes(userId, tab = 'active', search = '') {
       .from('notes')
       .select('*, note_tags(tag_id, tags(id, name))', { count: 'exact' })
       .eq('user_id', userId)
-    if (tab === 'archive') {
+    if (effectiveTab === 'archive') {
       query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
     } else {
       query = query
@@ -69,13 +88,13 @@ export function useNotes(userId, tab = 'active', search = '') {
       // force a sequential scan.  websearch_to_tsquery handles natural user input
       // (spaces = AND, "phrase", -exclude) without sanitisation on our side.
       // (advanced-full-text-search)
-      if (search) {
-        query = query.textSearch('search_vector', search, { type: 'websearch', config: 'english' })
+      if (effectiveSearch) {
+        query = query.textSearch('search_vector', effectiveSearch, { type: 'websearch', config: 'english' })
       }
     }
     // Paginate only when not searching — search returns all matching rows at once.
     // Offset pagination is appropriate at personal-notes scale. (data-pagination)
-    if (!search) {
+    if (!effectiveSearch) {
       query = query.range(0, PAGE_SIZE - 1)
     }
     const { data, error, count } = await query
@@ -86,12 +105,19 @@ export function useNotes(userId, tab = 'active', search = '') {
       setTotalCount(count)
       // For search: all results are in data, advance offset past the full set so
       // hasMore stays false. For normal fetch: advance by PAGE_SIZE.
-      setNextOffset(search ? (data?.length ?? 0) : PAGE_SIZE)
+      setNextOffset(effectiveSearch ? (data?.length ?? 0) : PAGE_SIZE)
     }
     setLoading(false)
   }, [userId, tab, search])
 
+  // Skip the auto-fetch when a startTransition already fetched notes for the
+  // incoming tab, to prevent a redundant double-fetch after the transition commits.
+  // (rendering-usetransition-loading)
   useEffect(() => {
+    if (transitionFetchedRef.current === tabRef.current) {
+      transitionFetchedRef.current = null
+      return
+    }
     fetchNotes()
   }, [fetchNotes])
 
@@ -368,5 +394,5 @@ export function useNotes(userId, tab = 'active', search = '') {
     )
   }, [])
 
-  return { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags }
+  return { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags, fetchNotes }
 }

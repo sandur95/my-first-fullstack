@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useTransition } from 'react'
 import { useNotes } from '../hooks/useNotes'
 import { useProfile } from '../hooks/useProfile'
 import { useTags } from '../hooks/useTags'
@@ -34,8 +34,9 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const debounceRef = useRef(null)
   const [toastMessage, setToastMessage] = useState(null)
   const toastTimeoutRef = useRef(null)
+  const [isPending, startTransition] = useTransition()
 
-  const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags } = useNotes(userId, tab, debouncedSearch)
+  const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags, fetchNotes } = useNotes(userId, tab, debouncedSearch)
   const { fullName, updateFullName } = useProfile(userId)
   const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
@@ -198,19 +199,35 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
         ) : (loading && notes.length === 0 && !debouncedSearch) ? (
           <p className="centered-status">Loading notes…</p>
         ) : (
-          <>
+          // Dim stale content while the tab-switch transition loads new notes.
+          // isPending is true only during startTransition — no flash, no empty state.
+          // (rendering-usetransition-loading)
+          <div style={{ opacity: isPending ? 0.5 : 1, transition: 'opacity 0.15s', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div className="notes-tab-bar">
               <button
                 type="button"
                 className={`notes-tab${tab === 'active' ? ' notes-tab--active' : ''}`}
-                onClick={() => { setSaveError(null); setView('list') }}
+                onClick={() => {
+                  setSaveError(null)
+                  startTransition(async () => {
+                    setView('list')
+                    await fetchNotes('active')
+                  })
+                }}
               >
                 Active
               </button>
               <button
                 type="button"
                 className={`notes-tab${tab === 'archive' ? ' notes-tab--active' : ''}`}
-                onClick={() => { setSaveError(null); clearSearch(); setView('archive') }}
+                onClick={() => {
+                  setSaveError(null)
+                  startTransition(async () => {
+                    clearSearch()
+                    setView('archive')
+                    await fetchNotes('archive')
+                  })
+                }}
               >
                 Archived
               </button>
@@ -312,7 +329,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                 ) : null}
               </>
             )}
-          </>
+          </div>
         )}
       </main>
       {toastMessage !== null ? (
