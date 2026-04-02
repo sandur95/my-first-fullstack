@@ -35,10 +35,9 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
     setShowDropdown(false)
   }, [editingNote])
 
+  const lowerInput = tagInput.toLowerCase()
   const filteredTags = allTags.filter(
-    t =>
-      !selectedTagIds.includes(t.id) &&
-      t.name.toLowerCase().includes(tagInput.toLowerCase())
+    t => !selectedTagIds.includes(t.id) && t.name.toLowerCase().includes(lowerInput)
   )
 
   async function handleTagInputKeyDown(e) {

@@ -48,8 +48,10 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     setSaveError(null)
     try {
       if (editingNote !== null) {
-        await updateNote(editingNote.id, { title, content })
-        await updateNoteTags(editingNote.id, tagIds, tags)
+        await Promise.all([
+          updateNote(editingNote.id, { title, content }),
+          updateNoteTags(editingNote.id, tagIds, tags),
+        ])
       } else {
         const newId = await createNote(userId, { title, content })
         await updateNoteTags(newId, tagIds, tags)
