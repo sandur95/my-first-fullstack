@@ -130,25 +130,45 @@ export function useNotes(userId, tab = 'active', search = '') {
                 .toSorted((a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at))
             })
           } else if (payload.eventType === 'UPDATE') {
-            setNotes(prev => {
-              // Ignore if the note isn't in the current list
-              if (!prev.some(n => n.id === payload.new.id)) return prev
-              const updated = payload.new
-              // Note moved out of the current tab — remove it
-              if (currentTab === 'active' && updated.archived_at !== null) {
-                return prev.filter(n => n.id !== updated.id)
-              }
-              if (currentTab === 'archive' && updated.archived_at === null) {
-                return prev.filter(n => n.id !== updated.id)
-              }
-              // Update in-place, preserving note_tags (not in the Realtime payload)
-              const sort = currentTab === 'archive'
-                ? (a, b) => new Date(b.archived_at) - new Date(a.archived_at)
-                : (a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at)
-              return prev
-                .map(n => n.id === updated.id ? { ...updated, note_tags: n.note_tags } : n)
-                .toSorted(sort)
-            })
+            const updated = payload.new
+            // Tab-switch cases are handled synchronously — no tag fetch needed.
+            // Note moved out of the current tab (archive/unarchive) → remove immediately.
+            if (currentTab === 'active' && updated.archived_at !== null) {
+              setNotes(prev => prev.filter(n => n.id !== updated.id))
+            } else if (currentTab === 'archive' && updated.archived_at === null) {
+              setNotes(prev => prev.filter(n => n.id !== updated.id))
+            } else {
+              // In-place update: fetch fresh note_tags so tag changes from other tabs
+              // are reflected without a full refetch. tabRef is re-read inside setNotes
+              // to guard against a tab change during the in-flight fetch.
+              // (rerender-use-ref-transient-values)
+              supabase
+                .from('note_tags')
+                .select('tag_id, tags(id, name)')
+                .eq('note_id', updated.id)
+                .then(({ data: tagData }) => {
+                  setNotes(prev => {
+                    if (!prev.some(n => n.id === updated.id)) return prev
+                    const cur = tabRef.current
+                    // Re-check tab after async gap
+                    if (cur === 'active' && updated.archived_at !== null) {
+                      return prev.filter(n => n.id !== updated.id)
+                    }
+                    if (cur === 'archive' && updated.archived_at === null) {
+                      return prev.filter(n => n.id !== updated.id)
+                    }
+                    const sort = cur === 'archive'
+                      ? (a, b) => new Date(b.archived_at) - new Date(a.archived_at)
+                      : (a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at)
+                    return prev
+                      .map(n => n.id === updated.id
+                        ? { ...updated, note_tags: tagData ?? n.note_tags }
+                        : n
+                      )
+                      .toSorted(sort)
+                  })
+                })
+            }
           } else if (payload.eventType === 'DELETE') {
             // payload.old contains only the PK (id) without REPLICA IDENTITY FULL
             setNotes(prev => prev.filter(n => n.id !== payload.old.id))
@@ -306,8 +326,9 @@ export function useNotes(userId, tab = 'active', search = '') {
   }, [])
 
   /**
-   * Replaces all tag associations for a note (delete-then-insert).
-   * Updates local state immediately without a refetch.
+   * Replaces all tag associations for a note (delete-then-insert), then bumps
+   * notes.updated_at so the existing Realtime channel broadcasts an UPDATE event
+   * to all other tabs — they re-fetch the note's tags and patch their local state.
    * (rerender-functional-setstate)
    *
    * @param {number} noteId
@@ -327,6 +348,16 @@ export function useNotes(userId, tab = 'active', search = '') {
         .insert(tagIds.map(tid => ({ note_id: noteId, tag_id: tid })))
       if (insError) throw insError
     }
+    // Touch notes.updated_at AFTER note_tags rows are committed so the Realtime
+    // UPDATE event arrives on other tabs only once the new tags are readable.
+    const { error: touchError } = await supabase
+      .from('notes')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', noteId)
+    if (touchError) throw touchError
+    // Update the originating tab's state immediately without waiting for the
+    // Realtime echo — builds tag objects from the already-available allTags list.
+    // (js-index-maps: Map for O(1) lookups)
     const tagMap = new Map(allTags.map(t => [t.id, t]))
     setNotes(prev =>
       prev.map(n =>
