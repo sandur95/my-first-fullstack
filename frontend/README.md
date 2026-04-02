@@ -45,12 +45,17 @@ frontend/
     │   └── database.types.js           ← JSDoc types mirroring DB schema
     ├── hooks/
     │   ├── useAuth.js                  ← Reactive auth session
-    │   └── useNotes.js                 ← Notes CRUD + local state
+    │   ├── useNotes.js                 ← Notes CRUD + local state
+    │   ├── useProfile.js               ← User profile fetch + update
+    │   ├── useTags.js                  ← Tag list + create
+    │   └── useTheme.js                 ← Light/dark theme toggle
     ├── components/
     │   ├── AuthForm.jsx                ← Login / sign-up
     │   ├── NoteEditor.jsx              ← Create / edit form
     │   ├── NoteCard.jsx                ← Single note display
-    │   └── NotesList.jsx               ← Authenticated main view
+    │   ├── NotesList.jsx               ← Authenticated main view
+    │   ├── ProfileEditor.jsx           ← Inline display-name editor
+    │   └── ThemeToggle.jsx             ← Light/dark mode button
     ├── App.jsx                         ← Root: auth gate
     ├── App.css                         ← Component styles
     └── index.css                       ← Design tokens + base reset
@@ -58,7 +63,12 @@ frontend/
 supabase/
 ├── migrations/
 │   ├── 20260330000000_create_users_notes.sql
-│   └── 20260330000001_create_user_profile_trigger.sql
+│   ├── 20260330000001_create_user_profile_trigger.sql
+│   ├── 20260401000000_add_notes_pinned.sql
+│   ├── 20260401000001_add_notes_archived_at.sql
+│   ├── 20260401000002_create_tags.sql
+│   ├── 20260401000003_add_notes_fts.sql
+│   └── 20260401000004_enable_notes_realtime.sql
 └── seed.sql
 ```
 
@@ -91,6 +101,30 @@ Defines the two core tables:
 #### `migrations/20260330000001_create_user_profile_trigger.sql`
 
 An `AFTER INSERT ON auth.users` trigger that automatically creates a matching `public.users` profile row whenever a new user signs up — for any auth method (email, OAuth, magic link). This keeps the FK constraint satisfied without any application-layer workaround. Uses `security definer` + `set search_path = ''` to prevent search-path injection.
+
+#### `migrations/20260401000000_add_notes_pinned.sql`
+
+Adds a `pinned boolean NOT NULL DEFAULT false` column. Replaces the initial `notes_user_id_idx` with a composite index `(user_id, pinned DESC, created_at DESC)` so that the `ORDER BY pinned DESC, created_at DESC` clause can be served entirely from the index without a runtime sort step.
+
+#### `migrations/20260401000001_add_notes_archived_at.sql`
+
+Adds `archived_at timestamptz DEFAULT NULL` for soft-delete support. A note is active when `archived_at IS NULL` and archived when it is set to `now()`. Replaces the previous composite index with two partial indexes:
+- `notes_active_user_pinned_created_idx` — covers the primary active-notes query
+- `notes_archived_user_created_idx`      — covers the archive-tab query
+
+Partial indexes are 5–20× smaller than full-table indexes and are faster to scan for queries that consistently filter on the same condition.
+
+#### `migrations/20260401000002_create_tags.sql`
+
+Creates `public.tags` (user-owned, unique name per user) and the `public.note_tags` join table. Adds a `security definer` helper function `owns_note(p_note_id)` that the `note_tags` RLS policies call to verify note ownership without a per-row correlated subquery on `notes`.
+
+#### `migrations/20260401000003_add_notes_fts.sql`
+
+Adds a **generated** `tsvector` column `search_vector` that Postgres maintains automatically on every `INSERT`/`UPDATE`. Title matches are weighted A and content matches are weighted B so callers can order by `ts_rank()` for relevance. A partial GIN index (`WHERE archived_at IS NULL`) covers full-text queries on active notes and is 30–50% smaller than a full-table index.
+
+#### `migrations/20260401000004_enable_notes_realtime.sql`
+
+Adds `notes` to the `supabase_realtime` publication. Clients subscribe with a `user_id=eq.<uid>` filter and RLS ensures they only receive events for their own rows.
 
 #### `seed.sql`
 
@@ -133,6 +167,18 @@ Manages the notes list for the authenticated user.
 | `useCallback` with minimal deps | Stable function references avoid cascading child re-renders. |
 | `fetchNotes` in `useCallback([userId])` | Re-fetches when `userId` changes (e.g. a different user logs in). |
 
+#### `hooks/useProfile.js` — User profile
+
+Fetches `full_name` from `public.users` once on mount (or when `userId` changes) and exposes `updateFullName`. Stores `null` instead of an empty string to avoid ghost values in the database. Returns `{ fullName, updateFullName }`.
+
+#### `hooks/useTags.js` — Tags
+
+Fetches the user's tag list ordered by name and exposes `createTag`. Uses `.toSorted()` (immutable sort) after an optimistic insert so the list stays alphabetical without a refetch. Returns `{ tags, createTag }`.
+
+#### `hooks/useTheme.js` — Theme
+
+Reads the initial theme from the `<html data-theme="…">` attribute set by the inline script in `index.html` — no `useEffect` and no flash of the wrong theme on load. `toggleTheme` writes to the DOM attribute, `localStorage`, and React state in one event handler. Returns `{ theme, toggleTheme }`.
+
 #### `components/AuthForm.jsx`
 
 Email/password sign-in and sign-up in a single togglable form.
@@ -153,6 +199,14 @@ Displays one note with Edit and Delete actions. Defined at **module top level** 
 
 The main authenticated view. Composites `NoteEditor` + `NoteCard` list. All sub-components are top-level imports. Handles save/delete orchestration and delegates mutation calls to `useNotes`.
 
+#### `components/ProfileEditor.jsx`
+
+Inline form for viewing and editing the user's display name. Mirrors the `NoteEditor` CSS patterns (`note-editor` / `note-editor-actions`) for visual consistency. Syncs the input field from `useProfile` via a single `useEffect` when the fetched value resolves. Defined at module top level. (`rerender-no-inline-components`)
+
+#### `components/ThemeToggle.jsx`
+
+Button that calls `useTheme().toggleTheme()`. The SVG icon constants (`SunIcon`, `MoonIcon`) are hoisted to module-level variables so they are never re-created on render. (`rendering-hoist-jsx`)
+
 #### `App.jsx` — Root
 
 Reads the session from `useAuth` and derives `userId` during render:
@@ -169,23 +223,30 @@ Shows `<AuthForm>` when unauthenticated and `<NotesList>` when authenticated. Us
 
 | Rule | Where | Effect |
 |------|-------|--------|
-| `rerender-functional-setstate` | `useNotes` callbacks | Stable callback refs, no stale closures |
-| `rerender-no-inline-components` | `NotesList` | Prevents full remount on every render |
+| `rerender-functional-setstate` | `useNotes`, `useTags` callbacks | Stable callback refs, no stale closures |
+| `rerender-no-inline-components` | `NotesList`, `ProfileEditor` | Prevents full remount on every render |
 | `rerender-derived-state-no-effect` | `App`, `AuthForm` | Eliminates redundant state + renders |
+| `rerender-lazy-state-init` | `useTheme` | Reads DOM once at mount, no re-render |
+| `rerender-move-effect-to-event` | `useTheme.toggleTheme` | DOM + localStorage written in event handler, not effect |
 | `rendering-conditional-render` | All components | Prevents `0`/`NaN` text rendering |
+| `rendering-hoist-jsx` | `ThemeToggle` | SVG constants never re-created on render |
 | `bundle-barrel-imports` | All imports | Direct imports only, no barrel overhead |
-| `security-rls-performance` (DB) | Migration | `(select auth.uid())` cached once per query |
-| `schema-foreign-key-indexes` (DB) | Migration | Fast JOINs + cascade deletes on `notes.user_id` |
+| `security-rls-performance` (DB) | All migrations | `(select auth.uid())` cached once per query |
+| `schema-foreign-key-indexes` (DB) | All migrations | Fast JOINs + cascade deletes on FK columns |
+| `query-partial-indexes` (DB) | archived_at, FTS migrations | Indexes cover only the rows they serve |
+| `query-index-types` (DB) | FTS migration | GIN index for `@@` tsvector queries |
 
 ---
 
 ## Decisions
 
 - **No router** — two views (auth / notes) need only a single conditional in `App`.
-- **No React Query / SWR** — `useNotes` provides sufficient deduplication for this scope.
+- **No React Query / SWR** — `useNotes`, `useProfile`, and `useTags` provide sufficient deduplication for this scope.
 - **JS not TypeScript** — matches the existing Vite scaffold; JSDoc types give IDE hints.
 - **`window.confirm` for deletes** — keeps scope minimal; swap for a modal component later.
-- **Excluded:** realtime subscriptions, search/tagging, pagination — out of scope.
+- **Soft-delete over hard-delete** — `archived_at` lets users recover notes; data is never permanently lost from the app.
+- **Generated `search_vector`** — Postgres maintains the FTS column automatically; no application code needs to build or update it.
+- **Realtime via Supabase channel** — `INSERT`/`UPDATE`/`DELETE` events streamed over WebSocket; client-side filter + RLS guarantee users only receive their own events.
 
 ---
 

@@ -28,18 +28,28 @@ my-first-fullstack/
 │       │   └── database.types.js   ← JSDoc types mirroring the DB schema
 │       ├── hooks/
 │       │   ├── useAuth.js          ← Reactive session state
-│       │   └── useNotes.js         ← Notes CRUD + optimistic local state
+│       │   ├── useNotes.js         ← Notes CRUD + optimistic local state
+│       │   ├── useProfile.js       ← User profile fetch + update
+│       │   ├── useTags.js          ← Tag list + create
+│       │   └── useTheme.js         ← Light/dark theme toggle
 │       └── components/
 │           ├── AuthForm.jsx        ← Login / sign-up form
 │           ├── NoteEditor.jsx      ← Create / edit form
 │           ├── NoteCard.jsx        ← Single note card
-│           └── NotesList.jsx       ← Authenticated main view
+│           ├── NotesList.jsx       ← Authenticated main view
+│           ├── ProfileEditor.jsx   ← Inline profile name editor
+│           └── ThemeToggle.jsx     ← Light/dark mode button
 └── supabase/
     ├── config.toml                 ← Local Supabase config (ports, auth settings)
     ├── seed.sql                    ← Sample users + notes (Alice, Bob, Carol)
     └── migrations/
         ├── 20260330000000_create_users_notes.sql
-        └── 20260330000001_create_user_profile_trigger.sql
+        ├── 20260330000001_create_user_profile_trigger.sql
+        ├── 20260401000000_add_notes_pinned.sql
+        ├── 20260401000001_add_notes_archived_at.sql
+        ├── 20260401000002_create_tags.sql
+        ├── 20260401000003_add_notes_fts.sql
+        └── 20260401000004_enable_notes_realtime.sql
 ```
 
 ---
@@ -143,19 +153,39 @@ npm run lint      # ESLint
 
 ```
 public.users
-  id          uuid  PK  → references auth.users(id)
-  email       text
-  full_name   text
-  created_at  timestamptz
-  updated_at  timestamptz
+  id            uuid  PK  → references auth.users(id)
+  email         text
+  full_name     text
+  created_at    timestamptz
+  updated_at    timestamptz
 
 public.notes
+  id            bigint  PK  (generated always as identity)
+  user_id       uuid    FK  → public.users(id)
+  title         text    NOT NULL
+  content       text
+  pinned        boolean NOT NULL DEFAULT false
+  archived_at   timestamptz   ← NULL = active; set to now() to soft-delete
+  search_vector tsvector GENERATED ALWAYS AS STORED  ← weighted FTS column
+  created_at    timestamptz
+  updated_at    timestamptz
+
+public.tags
   id          bigint  PK  (generated always as identity)
   user_id     uuid    FK  → public.users(id)
-  title       text    NOT NULL
-  content     text
+  name        text    NOT NULL
   created_at  timestamptz
-  updated_at  timestamptz
+  UNIQUE (user_id, name)
+
+public.note_tags  (join table)
+  note_id     bigint  FK  → public.notes(id)  ON DELETE CASCADE
+  tag_id      bigint  FK  → public.tags(id)   ON DELETE CASCADE
+  PRIMARY KEY (note_id, tag_id)
 ```
 
-Index on `notes(user_id)` — Postgres does not auto-index FK columns, so without this every RLS check would be a sequential scan.
+Indexes on `notes`:
+- `notes_active_user_pinned_created_idx` — partial index (`WHERE archived_at IS NULL`) covering `(user_id, pinned DESC, created_at DESC)` for the active-notes query
+- `notes_archived_user_created_idx`      — partial index (`WHERE archived_at IS NOT NULL`) for the archive tab
+- `notes_active_search_vector_idx`       — partial GIN index for full-text search on active notes
+
+Index on `tags(user_id)` — FK column not covered by the PK.
