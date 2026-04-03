@@ -189,3 +189,58 @@ Indexes on `notes`:
 - `notes_active_search_vector_idx`       — partial GIN index for full-text search on active notes
 
 Index on `tags(user_id)` — FK column not covered by the PK.
+
+---
+
+## Note sharing
+
+Owners can share any note with another registered user by email address. The sharee sees shared notes in a **"Shared with me"** tab alongside their own notes. Ownership and all existing RLS policies are unchanged — sharing is fully additive.
+
+### Permission model
+
+| Permission | Read | Edit content | Manage tags | Upload attachments |
+|:-----------|:----:|:------------:|:-----------:|:-----------------:|
+| `view`     | ✓    | —            | —           | —                 |
+| `edit`     | ✓    | ✓            | ✓           | ✓                 |
+
+Owners always retain full access including delete, regardless of what permission they granted a sharee.
+
+### Database additions
+
+```
+public.note_permission  (enum)
+  view
+  edit
+
+public.note_shares
+  id            bigint  PK  (generated always as identity)
+  note_id       bigint  FK  → public.notes(id)  ON DELETE CASCADE
+  owner_id      uuid    FK  → public.users(id)
+  sharee_id     uuid    FK  → public.users(id)
+  permission    note_permission  NOT NULL DEFAULT 'view'
+  created_at    timestamptz
+  UNIQUE (note_id, sharee_id)
+```
+
+RLS on `note_shares` allows the owner to manage their own share rows and the sharee to `SELECT` rows where they are the sharee.
+
+Five **security-definer** helper functions are added so that sharees can read the shared note rows, attachments, and storage objects without changing the core table policies. A `get_user_id_by_email` RPC lets the frontend look up a target user's ID without exposing the `users` table directly.
+
+### New files
+
+| File | What it does |
+|:-----|:------------|
+| `supabase/migrations/20260403000000_create_note_shares.sql` | Creates the `note_permission` enum, `note_shares` table, RLS, security-definer helpers, and additive policies on `notes`, `note_attachments`, and storage |
+| `supabase/migrations/20260403000001_enable_note_shares_realtime.sql` | Sets `REPLICA IDENTITY FULL` on `note_shares` and adds it to the Realtime publication |
+| `frontend/src/hooks/useShares.js` | Owner-facing: fetch shares, share by email, update permission, revoke |
+| `frontend/src/hooks/useSharedNotes.js` | Sharee-facing: fetch shared notes, update a shared note, Realtime subscription |
+| `frontend/src/components/SharePanel.jsx` | Modal that owners open to manage who a note is shared with |
+
+### How Realtime works for shared notes
+
+`useSharedNotes` subscribes to two channels:
+
+1. **`note_shares:{userId}`** — fires on `INSERT`, `UPDATE`, and `DELETE` on `note_shares` rows where the current user is the sharee. A new share triggers a full re-fetch; a deleted row removes the note from the list immediately.
+2. **`shared-notes-content:{userId}`** — fires on `UPDATE` on the `notes` rows that are shared with the user. The channel tracks *all* shared note IDs including archived ones, so when an owner un-archives a note the update is delivered and the note re-appears in the sharee's active list.
+
+> **Note:** `REPLICA IDENTITY FULL` is required on `note_shares` for Realtime to include old row values in `DELETE` events. Without it, Supabase Realtime cannot report which row was deleted and the sharee's list would not update when a share is revoked.

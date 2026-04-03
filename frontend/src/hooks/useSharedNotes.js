@@ -1,22 +1,21 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 /**
  * Loads notes that have been shared with the authenticated user by other owners.
  *
- * The notes are fetched via note_shares (where shared_with_user_id = userId), with
- * nested selects for note content, tags, attachments, and the owner's profile row.
- *
- * RLS enforcement:
- *   - notes_select_shared: sharee can SELECT the note row (can_view_shared_note)
- *   - note_attachments_select_shared: sharee can SELECT metadata rows
- *   - users_select_shared: sharee can SELECT the owner's profile (has_share_relationship_with)
- *
  * Each result item is a normal note object extended with:
  *   - sharePermission: 'view' | 'edit'  — the level of access granted
  *   - owner: { id, full_name, avatar_path }
  *
- * No Realtime subscription — sharee sees updates on manual tab switch.
+ * Realtime: two channels keep the list live without page reload.
+ *   1. note_shares — share granted (INSERT), revoked (DELETE), permission changed (UPDATE).
+ *      Requires ALTER TABLE note_shares REPLICA IDENTITY FULL (migration 20260403000001)
+ *      so that DELETE payloads include note_id (not just the PK id).
+ *   2. notes (content channel) — UPDATE events on the currently-shared note IDs.
+ *      sharedNoteIdsKey is a sorted comma-separated primitive string computed inline;
+ *      Object.is prevents channel recreation on content-only updates while correctly
+ *      recreating it when the share set changes. (rerender-dependencies)
  *
  * @param {string|null} userId - The authenticated user's UUID (the sharee).
  */
@@ -24,6 +23,15 @@ export function useSharedNotes(userId) {
   const [sharedNotes, setSharedNotes] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  // All note IDs shared with this user — including archived ones.
+  // Channel 2 subscribes to this wider set so that an unarchive UPDATE
+  // is received even after the note was removed from the visible list.
+  const [allSharedNoteIds, setAllSharedNoteIds] = useState([])
+  // Snapshot of sharedNotes used inside Realtime handlers to tell
+  // "visible" from "shared but archived" without adding sharedNotes
+  // as an effect dependency. (rerender-use-ref-transient-values)
+  const sharedNotesRef = useRef([])
+  useEffect(() => { sharedNotesRef.current = sharedNotes }, [sharedNotes])
 
   const fetchSharedNotes = useCallback(async () => {
     if (!userId) {
@@ -33,19 +41,28 @@ export function useSharedNotes(userId) {
     setLoading(true)
     setError(null)
 
-    // Join through note_shares to get the notes plus owner profile.
-    // notes!inner ensures the join is INNER — share rows whose note was
-    // deleted cascade-delete automatically, but this guards against stale rows.
-    // Archived notes are excluded: archived_at IS NULL enforced at query time.
-    // (data-n-plus-one: single query fetches notes + tags + attachments + owner)
-    const { data, error: err } = await supabase
-      .from('note_shares')
-      .select(
-        'id, permission, notes!inner(*, note_tags(tag_id, tags(id, name)), note_attachments(id, storage_path, file_name, mime_type, file_size), users!user_id(id, full_name, avatar_path))'
-      )
-      .eq('shared_with_user_id', userId)
-      .is('notes.archived_at', null)
-      .order('notes(created_at)', { ascending: false })
+    // Run both queries in parallel:
+    //   - visible notes (archived_at IS NULL, full nested select)
+    //   - all shared note IDs without any archived filter, for widening
+    //     the Channel 2 subscription so unarchive UPDATEs are received.
+    // (async-parallel)
+    const [
+      { data, error: err },
+      { data: allIdsData },
+    ] = await Promise.all([
+      supabase
+        .from('note_shares')
+        .select(
+          'id, permission, notes!inner(*, note_tags(tag_id, tags(id, name)), note_attachments(id, storage_path, file_name, mime_type, file_size), users!user_id(id, full_name, avatar_path))'
+        )
+        .eq('shared_with_user_id', userId)
+        .is('notes.archived_at', null)
+        .order('notes(created_at)', { ascending: false }),
+      supabase
+        .from('note_shares')
+        .select('note_id')
+        .eq('shared_with_user_id', userId),
+    ])
 
     if (err) {
       setError(err.message)
@@ -65,7 +82,32 @@ export function useSharedNotes(userId) {
     }))
 
     setSharedNotes(flattened)
+    setAllSharedNoteIds((allIdsData ?? []).map(r => r.note_id))
     setLoading(false)
+  }, [userId])
+
+  /**
+   * Fetches a single share row by note_id — used by the Realtime INSERT handler to
+   * get full note details (tags, attachments, owner) for a newly-granted share.
+   * Returns the flattened note object or null when not found / archived.
+   */
+  const fetchOneSharedNote = useCallback(async (noteId) => {
+    const { data, error: err } = await supabase
+      .from('note_shares')
+      .select(
+        'id, permission, notes!inner(*, note_tags(tag_id, tags(id, name)), note_attachments(id, storage_path, file_name, mime_type, file_size), users!user_id(id, full_name, avatar_path))'
+      )
+      .eq('shared_with_user_id', userId)
+      .eq('note_id', noteId)
+      .is('notes.archived_at', null)
+      .maybeSingle()
+    if (err || !data) return null
+    return {
+      ...data.notes,
+      sharePermission: data.permission,
+      owner: data.notes.users ?? null,
+      users: undefined,
+    }
   }, [userId])
 
   /**
@@ -92,6 +134,143 @@ export function useSharedNotes(userId) {
     )
     return null
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // Realtime channel 1: note_shares
+  // Handles share granted (INSERT), revoked (DELETE), permission changed (UPDATE).
+  //
+  // Filter: shared_with_user_id=eq.${userId} — applied server-side for INSERT/UPDATE.
+  // DELETE events are not server-side filterable (Supabase limitation); the
+  // client-side filter `n.id !== payload.old.note_id` is the safety net — if the
+  // deletion belongs to another user, the note_id won't be in the list → no-op.
+  // REPLICA IDENTITY FULL ensures payload.old.note_id is available on DELETE.
+  //
+  // Channel is created once per user login/logout. (rerender-functional-setstate)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!userId) return
+
+    const sharesChannel = supabase
+      .channel(`note_shares:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'note_shares',
+          filter: `shared_with_user_id=eq.${userId}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // New share granted → track ID for Channel 2, fetch full note, prepend.
+            setAllSharedNoteIds(prev =>
+              prev.includes(payload.new.note_id) ? prev : [...prev, payload.new.note_id]
+            )
+            fetchOneSharedNote(payload.new.note_id).then(note => {
+              if (!note) return
+              setSharedNotes(prev => {
+                if (prev.some(n => n.id === note.id)) return prev // deduplicate
+                return [note, ...prev]
+              })
+            })
+          } else if (payload.eventType === 'DELETE') {
+            // Share revoked — REPLICA IDENTITY FULL gives us note_id in payload.old.
+            setAllSharedNoteIds(prev => prev.filter(id => id !== payload.old.note_id))
+            setSharedNotes(prev => prev.filter(n => n.id !== payload.old.note_id))
+          } else if (payload.eventType === 'UPDATE') {
+            // Permission level changed.
+            setSharedNotes(prev =>
+              prev.map(n =>
+                n.id === payload.new.note_id
+                  ? { ...n, sharePermission: payload.new.permission }
+                  : n
+              )
+            )
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(sharesChannel) }
+  }, [userId, fetchOneSharedNote])
+
+  // ---------------------------------------------------------------------------
+  // Realtime channel 2: notes content
+  // Listens for UPDATE events on ALL shared note IDs — including archived ones.
+  //
+  // allSharedNoteIdsKey is derived from allSharedNoteIds (which includes archived
+  // notes). This ensures that when the owner unarchives a shared note, the UPDATE
+  // event is delivered and the note is re-added to the visible list.
+  //
+  // The primitive string dep means Object.is prevents channel recreation on
+  // content-only updates (IDs unchanged); the channel IS recreated when the share
+  // set changes. (rerender-dependencies)
+  //
+  // Supabase Realtime `in` filter supports up to 100 values — fine at personal scale.
+  // ---------------------------------------------------------------------------
+  const allSharedNoteIdsKey = [...allSharedNoteIds].sort((a, b) => a - b).join(',')
+
+  useEffect(() => {
+    if (!userId || !allSharedNoteIdsKey) return
+
+    const notesChannel = supabase
+      .channel(`shared-notes-content:${userId}:${allSharedNoteIdsKey}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notes',
+          filter: `id=in.(${allSharedNoteIdsKey})`,
+        },
+        (payload) => {
+          const updated = payload.new
+          // Archived → remove from visible list.
+          if (updated.archived_at) {
+            setSharedNotes(prev => prev.filter(n => n.id !== updated.id))
+            return
+          }
+          // sharedNotesRef lets us check visibility without adding sharedNotes
+          // as a dep (which would recreate the channel on every content update).
+          // (rerender-use-ref-transient-values)
+          if (!sharedNotesRef.current.some(n => n.id === updated.id)) {
+            // Note was archived (not in visible list) and is now unarchived →
+            // fetch full details (tags, attachments, owner) and re-add.
+            fetchOneSharedNote(updated.id).then(note => {
+              if (!note) return
+              setSharedNotes(prev =>
+                prev.some(n => n.id === note.id) ? prev : [note, ...prev]
+              )
+            })
+            return
+          }
+          // In-place content update for a visible note.
+          // Fetch fresh tags + attachments in parallel, preserving sharePermission
+          // and owner (they are not on the notes row). (async-parallel)
+          Promise.all([
+            supabase.from('note_tags').select('tag_id, tags(id, name)').eq('note_id', updated.id),
+            supabase.from('note_attachments').select('id, storage_path, file_name, mime_type, file_size').eq('note_id', updated.id),
+          ]).then(([{ data: tagData }, { data: attachData }]) => {
+            setSharedNotes(prev =>
+              prev.map(n =>
+                n.id === updated.id
+                  ? {
+                      ...updated,
+                      sharePermission: n.sharePermission,
+                      owner: n.owner,
+                      note_tags: tagData ?? n.note_tags,
+                      note_attachments: attachData ?? n.note_attachments,
+                    }
+                  : n
+              )
+            )
+          })
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(notesChannel) }
+  }, [userId, allSharedNoteIdsKey, fetchOneSharedNote]) // allSharedNoteIdsKey is a primitive string
 
   return { sharedNotes, loading, error, fetchSharedNotes, updateSharedNote }
 }
