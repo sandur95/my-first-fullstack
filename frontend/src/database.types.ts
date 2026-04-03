@@ -1,12 +1,4 @@
-﻿supabase : Connecting to db 5432
-строка:1 знак:1
-+ supabase gen types typescript --local 2>&1 | Out-File -Encoding utf8  ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Connecting to db 5432:String) [], 
-    RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
