@@ -258,3 +258,70 @@ Shows `<AuthForm>` when unauthenticated and `<NotesList>` when authenticated. Us
    enable_confirmations = false
    ```
 2. **`.env.local` in git** — Vite gitignores `.env.local` automatically. Only `.env.example` should be committed.
+
+---
+
+## Note sharing
+
+Owners can share any note with another registered user by email address. The sharee sees shared notes in a **"Shared with me"** tab alongside their own notes. Ownership and all existing RLS policies are unchanged — sharing is fully additive.
+
+### Permission model
+
+| Permission | Read | Edit title & content |
+|:-----------|:----:|:--------------------:|
+| `view`     | ✓    | —                    |
+| `edit`     | ✓    | ✓                    |
+
+Owners always retain full access including pin, archive, delete, tag management, and attachment uploads — none of these are available to sharees regardless of permission level.
+
+### Database additions
+
+#### `migrations/20260403000000_create_note_shares.sql`
+
+Creates the `note_permission` enum (`view | edit`), the `note_shares` table, and all supporting RLS infrastructure.
+
+```
+public.note_permission  (enum)
+  view
+  edit
+
+public.note_shares
+  id                  bigint  PK  (generated always as identity)
+  note_id             bigint  FK  → public.notes(id)  ON DELETE CASCADE
+  shared_with_user_id uuid    FK  → public.users(id)
+  permission          note_permission  NOT NULL DEFAULT 'view'
+  created_at          timestamptz
+  UNIQUE (note_id, shared_with_user_id)
+```
+
+Five **security-definer** helper functions gate access without changing existing policies:
+
+| Function | Used by |
+|:---------|:--------|
+| `can_view_shared_note(note_id)` | `notes_select_shared`, `note_attachments_select_shared`, `attachments_select_shared` (storage) |
+| `can_edit_shared_note(note_id)` | `notes_update_shared` USING clause |
+| `note_owner_fields_unchanged(…)` | `notes_update_shared` WITH CHECK — blocks sharees from changing `user_id`, `pinned`, or `archived_at` |
+| `shares_a_note_with_owner(owner_id)` | `avatars_select_shared` (storage) — lets a sharee see the owner's avatar |
+| `has_share_relationship_with(other_id)` | `users_select_shared` — allows owner/sharee to read each other's display name and avatar path |
+
+A `get_user_id_by_email` RPC lets the frontend look up a target user's UUID by email without exposing `public.users` to direct cross-user queries.
+
+#### `migrations/20260403000001_enable_note_shares_realtime.sql`
+
+Sets `REPLICA IDENTITY FULL` on `note_shares` and adds it to the `supabase_realtime` publication. `REPLICA IDENTITY FULL` is required so that `DELETE` payloads include `note_id` — without it Supabase Realtime cannot report which row was deleted and the sharee's list would not update on a revoke.
+
+### New frontend files
+
+| File | What it does |
+|:-----|:------------|
+| `hooks/useShares.js` | Owner-facing: fetch shares, share by email, update permission, revoke |
+| `hooks/useSharedNotes.js` | Sharee-facing: fetch shared notes, update a shared note, three Realtime channels |
+| `components/SharePanel.jsx` | Modal that owners open to manage who a note is shared with |
+
+### How Realtime works for shared notes
+
+`useSharedNotes` maintains three Supabase channels:
+
+1. **`note_shares:{userId}`** — `INSERT / UPDATE / DELETE` on `note_shares` rows where the current user is the sharee. A new share fetches the full note and prepends it; a deleted share removes the note immediately; an updated share refreshes the permission level.
+2. **`shared-notes-content:{userId}`** — `UPDATE` on `notes` for all shared IDs (including archived ones). Handles in-place edits, archive, and un-archive. Tracking archived IDs ensures an un-archive UPDATE is received even after the note left the visible list.
+3. **`shared-notes-attachments:{userId}`** — `INSERT / DELETE` on `note_attachments` for all shared note IDs. Attachment uploads and deletions do not touch the `notes` row, so a separate channel is required. `REPLICA IDENTITY FULL` (set in migration `20260402000002`) provides `note_id` on `DELETE` payloads.
