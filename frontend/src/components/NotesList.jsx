@@ -264,86 +264,17 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
             onCancel={handleCancel}
             saving={saving}
           />
-        ) : showShared ? (
-          // Shared with me — notes owned by others, shared to this user
-          <div className="notes-view">
-            <div className="notes-tab-bar" role="tablist" aria-label="Notes views">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={false}
-                className="notes-tab"
-                onClick={() => { setSaveError(null); startTransition(() => { setView('list'); fetchNotes('active') }) }}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={false}
-                className="notes-tab"
-                onClick={() => { setSaveError(null); startTransition(() => { clearSearch(); setView('archive'); fetchNotes('archive') }) }}
-              >
-                Archived
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={true}
-                className="notes-tab notes-tab--active"
-              >
-                Shared with me
-              </button>
-            </div>
-            <div className="notes-list-header">
-              <h2 className="notes-list-title">
-                {sharedNotes.length === 0
-                  ? 'No notes shared with you'
-                  : `${sharedNotes.length} shared note${sharedNotes.length === 1 ? '' : 's'}`}
-              </h2>
-            </div>
-            {sharedLoading && sharedNotes.length === 0 ? (
-              <p className="centered-status">Loading…</p>
-            ) : sharedError !== null ? (
-              <p className="form-error" role="alert">{sharedError}</p>
-            ) : sharedNotes.length === 0 ? (
-              <p className="empty-state">Notes shared with you will appear here.</p>
-            ) : (
-              <div className="notes-grid">
-                {sharedNotes.map(note => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    isArchived={false}
-                    isOwner={false}
-                    sharePermission={note.sharePermission}
-                    ownerName={note.owner?.full_name ?? null}
-                    ownerAvatarPath={note.owner?.avatar_path ?? null}
-                    onEdit={note.sharePermission === 'edit' ? handleSharedEdit : () => {}}
-                    onPin={() => {}}
-                    onArchive={() => {}}
-                    onUnarchive={() => {}}
-                    onDeletePermanent={() => {}}
-                    onTagClick={() => {}}
-                    onDeleteAttachment={() => {}}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (loading && notes.length === 0 && !debouncedSearch) ? (
-          <p className="centered-status">Loading notes…</p>
         ) : (
-          // Dim stale content while the tab-switch transition loads new notes.
-          // isPending is true only during startTransition — no flash, no empty state.
-          // (rendering-usetransition-loading)
+          // Single unified notes-view — tab bar is always mounted, only content below switches.
+          // Dimming via isPending covers all three tab transitions uniformly.
+          // (rendering-usetransition-loading, rerender-no-inline-components)
           <div className="notes-view" style={{ opacity: isPending ? 0.5 : 1, transition: 'opacity 0.15s' }}>
             <div className="notes-tab-bar" role="tablist" aria-label="Notes views">
               <button
                 type="button"
                 role="tab"
-                aria-selected={tab === 'active'}
-                className={`notes-tab${tab === 'active' ? ' notes-tab--active' : ''}`}
+                aria-selected={view === 'list'}
+                className={`notes-tab${view === 'list' ? ' notes-tab--active' : ''}`}
                 onClick={() => {
                   setSaveError(null)
                   startTransition(async () => {
@@ -357,8 +288,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               <button
                 type="button"
                 role="tab"
-                aria-selected={tab === 'archive'}
-                className={`notes-tab${tab === 'archive' ? ' notes-tab--active' : ''}`}
+                aria-selected={view === 'archive'}
+                className={`notes-tab${view === 'archive' ? ' notes-tab--active' : ''}`}
                 onClick={() => {
                   setSaveError(null)
                   startTransition(async () => {
@@ -373,8 +304,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               <button
                 type="button"
                 role="tab"
-                aria-selected={false}
-                className="notes-tab"
+                aria-selected={view === 'shared'}
+                className={`notes-tab${view === 'shared' ? ' notes-tab--active' : ''}`}
                 onClick={() => {
                   setSaveError(null)
                   startTransition(async () => {
@@ -388,104 +319,148 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               </button>
             </div>
 
-            {tab === 'active' ? (
-              <div className="notes-search">
-                <input
-                  type="search"
-                  className="notes-search-input"
-                  placeholder="Search notes…"
-                  value={searchInput}
-                  onChange={e => {
-                    const value = e.target.value
-                    setSearchInput(value)
-                    clearTimeout(debounceRef.current)
-                    debounceRef.current = setTimeout(() => setDebouncedSearch(value), 300)
-                  }}
-                  aria-label="Search notes"
-                />
-                {searchInput !== '' ? (
-                  <button
-                    type="button"
-                    className="notes-search-clear"
-                    onClick={clearSearch}
-                    aria-label="Clear search"
-                  >
-                    ✕
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="notes-list-header">
-              <h2 className="notes-list-title">
-                {notes.length === 0
-                  ? (tab === 'archive' ? 'No archived notes' : (debouncedSearch !== '' ? 'No results' : 'No notes yet'))
-                  : tab === 'archive'
-                    ? `${notes.length} archived`
-                    : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
-              </h2>
-              <div className="notes-list-actions">
-                {activeTagId !== null ? (
-                  <button
-                    type="button"
-                    className="tag-filter-chip"
-                    onClick={() => setActiveTagId(null)}
-                  >
-                    {tags.find(t => t.id === activeTagId)?.name} ×
-                  </button>
-                ) : null}
-                {tab === 'active' ? (
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => { setSaveError(null); setView('compose') }}
-                  >
-                    + New note
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            {notes.length === 0 ? (
-              <p className="empty-state">
-                {tab === 'archive'
-                  ? 'Archived notes will appear here.'
-                  : debouncedSearch !== ''
-                    ? 'No notes match your search.'
-                    : 'Click \u201c+ New note\u201d to get started.'}
-              </p>
+            {showShared ? (
+              <>
+                <div className="notes-list-header">
+                  <h2 className="notes-list-title">
+                    {sharedNotes.length === 0
+                      ? 'No notes shared with you'
+                      : `${sharedNotes.length} shared note${sharedNotes.length === 1 ? '' : 's'}`}
+                  </h2>
+                </div>
+                {sharedLoading && sharedNotes.length === 0 ? (
+                  <p className="centered-status">Loading…</p>
+                ) : sharedError !== null ? (
+                  <p className="form-error" role="alert">{sharedError}</p>
+                ) : sharedNotes.length === 0 ? (
+                  <p className="empty-state">Notes shared with you will appear here.</p>
+                ) : (
+                  <div className="notes-grid">
+                    {sharedNotes.map(note => (
+                      <NoteCard
+                        key={note.id}
+                        note={note}
+                        isArchived={false}
+                        isOwner={false}
+                        sharePermission={note.sharePermission}
+                        ownerName={note.owner?.full_name ?? null}
+                        ownerAvatarPath={note.owner?.avatar_path ?? null}
+                        onEdit={note.sharePermission === 'edit' ? handleSharedEdit : () => {}}
+                        onPin={() => {}}
+                        onArchive={() => {}}
+                        onUnarchive={() => {}}
+                        onDeletePermanent={() => {}}
+                        onTagClick={() => {}}
+                        onDeleteAttachment={() => {}}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (loading && notes.length === 0 && !debouncedSearch) ? (
+              <p className="centered-status">Loading notes…</p>
             ) : (
               <>
-                <div className="notes-grid">
-                  {displayedNotes.map(note => (
-                    <NoteCard
-                      key={note.id}
-                      note={note}
-                      isArchived={tab === 'archive'}
-                      isOwner={true}
-                      onShare={tab === 'active' ? (id) => setSharingNoteId(id) : null}
-                      onEdit={handleEdit}
-                      onPin={handlePin}
-                      onArchive={handleArchive}
-                      onUnarchive={handleUnarchive}
-                      onDeletePermanent={handleDelete}
-                      onTagClick={handleTagClick}
-                      onDeleteAttachment={handleDeleteAttachment}
+                {tab === 'active' ? (
+                  <div className="notes-search">
+                    <input
+                      type="search"
+                      className="notes-search-input"
+                      placeholder="Search notes…"
+                      value={searchInput}
+                      onChange={e => {
+                        const value = e.target.value
+                        setSearchInput(value)
+                        clearTimeout(debounceRef.current)
+                        debounceRef.current = setTimeout(() => setDebouncedSearch(value), 300)
+                      }}
+                      aria-label="Search notes"
                     />
-                  ))}
-                </div>
-                {hasMore && !debouncedSearch ? (
-                  <div className="notes-load-more">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      disabled={loadingMore}
-                      onClick={loadMore}
-                    >
-                      {loadingMore ? 'Loading…' : 'Load more'}
-                    </button>
+                    {searchInput !== '' ? (
+                      <button
+                        type="button"
+                        className="notes-search-clear"
+                        onClick={clearSearch}
+                        aria-label="Clear search"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
+
+                <div className="notes-list-header">
+                  <h2 className="notes-list-title">
+                    {notes.length === 0
+                      ? (tab === 'archive' ? 'No archived notes' : (debouncedSearch !== '' ? 'No results' : 'No notes yet'))
+                      : tab === 'archive'
+                        ? `${notes.length} archived`
+                        : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
+                  </h2>
+                  <div className="notes-list-actions">
+                    {activeTagId !== null ? (
+                      <button
+                        type="button"
+                        className="tag-filter-chip"
+                        onClick={() => setActiveTagId(null)}
+                      >
+                        {tags.find(t => t.id === activeTagId)?.name} ×
+                      </button>
+                    ) : null}
+                    {tab === 'active' ? (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => { setSaveError(null); setView('compose') }}
+                      >
+                        + New note
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {notes.length === 0 ? (
+                  <p className="empty-state">
+                    {tab === 'archive'
+                      ? 'Archived notes will appear here.'
+                      : debouncedSearch !== ''
+                        ? 'No notes match your search.'
+                        : 'Click \u201c+ New note\u201d to get started.'}
+                  </p>
+                ) : (
+                  <>
+                    <div className="notes-grid">
+                      {displayedNotes.map(note => (
+                        <NoteCard
+                          key={note.id}
+                          note={note}
+                          isArchived={tab === 'archive'}
+                          isOwner={true}
+                          onShare={tab === 'active' ? (id) => setSharingNoteId(id) : null}
+                          onEdit={handleEdit}
+                          onPin={handlePin}
+                          onArchive={handleArchive}
+                          onUnarchive={handleUnarchive}
+                          onDeletePermanent={handleDelete}
+                          onTagClick={handleTagClick}
+                          onDeleteAttachment={handleDeleteAttachment}
+                        />
+                      ))}
+                    </div>
+                    {hasMore && !debouncedSearch ? (
+                      <div className="notes-load-more">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={loadingMore}
+                          onClick={loadMore}
+                        >
+                          {loadingMore ? 'Loading…' : 'Load more'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </>
             )}
           </div>
