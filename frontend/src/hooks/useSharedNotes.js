@@ -272,5 +272,71 @@ export function useSharedNotes(userId) {
     return () => { supabase.removeChannel(notesChannel) }
   }, [userId, allSharedNoteIdsKey, fetchOneSharedNote]) // allSharedNoteIdsKey is a primitive string
 
+  // ---------------------------------------------------------------------------
+  // Realtime channel 3: note_attachments
+  // Listens for INSERT and DELETE on note_attachments for all shared note IDs.
+  //
+  // Why a separate channel: uploading or deleting an attachment does not touch
+  // the notes row, so Channel 2 (UPDATE on notes) never fires for these events.
+  // note_attachments is already in the Realtime publication with REPLICA IDENTITY
+  // FULL (migration 20260402000002), and the note_attachments_select_shared RLS
+  // policy lets the sharee pass Realtime's row-visibility check (migration
+  // 20260403000000).
+  //
+  // INSERT → append the new attachment to the matching note's list.
+  // DELETE → REPLICA IDENTITY FULL provides payload.old with note_id + id, so
+  //          the client can remove the exact attachment without a refetch.
+  //
+  // Channel is recreated when the share set changes (allSharedNoteIdsKey changes).
+  // (rerender-dependencies)
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!userId || !allSharedNoteIdsKey) return
+
+    const attachmentsChannel = supabase
+      .channel(`shared-notes-attachments:${userId}:${allSharedNoteIdsKey}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'note_attachments',
+          filter: `note_id=in.(${allSharedNoteIdsKey})`,
+        },
+        (payload) => {
+          const att = payload.new
+          setSharedNotes(prev =>
+            prev.map(n =>
+              n.id === att.note_id
+                ? { ...n, note_attachments: [...(n.note_attachments ?? []), att] }
+                : n
+            )
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'note_attachments',
+          filter: `note_id=in.(${allSharedNoteIdsKey})`,
+        },
+        (payload) => {
+          const att = payload.old
+          setSharedNotes(prev =>
+            prev.map(n =>
+              n.id === att.note_id
+                ? { ...n, note_attachments: (n.note_attachments ?? []).filter(a => a.id !== att.id) }
+                : n
+            )
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(attachmentsChannel) }
+  }, [userId, allSharedNoteIdsKey]) // allSharedNoteIdsKey is a primitive string
+
   return { sharedNotes, loading, error, fetchSharedNotes, updateSharedNote }
 }

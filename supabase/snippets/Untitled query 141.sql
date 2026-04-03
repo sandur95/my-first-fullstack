@@ -1,2 +1,0 @@
-
-SELECT * FROM notes; -- as postgres superuser, all rows visible
