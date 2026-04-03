@@ -22,9 +22,10 @@ import { validateAttachmentFile } from '../hooks/useAttachmentUpload'
  *   allTags: import('../lib/database.types').Tag[],
  *   onCreateTag: Function,
  *   userId: string|null,
+ *   sharePermission?: 'edit'|null,
  * }} props
  */
-export default function NoteEditor({ editingNote, onSave, onCancel, saving, allTags, onCreateTag, userId }) {
+export default function NoteEditor({ editingNote, onSave, onCancel, saving, allTags, onCreateTag, userId, sharePermission = null }) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [selectedTagIds, setSelectedTagIds] = useState([])
@@ -141,63 +142,70 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
         rows={4}
       />
 
-      <label>Tags</label>
-      {selectedTags.length > 0 ? (
-        <div className="note-card-tags" style={{ marginBottom: '.375rem' }}>
-          {selectedTags.map(tag => (
-            <button
-              key={tag.id}
-              type="button"
-              className="tag-pill tag-pill--remove"
-              onClick={() => handleRemoveTag(tag.id)}
-            >
-              {tag.name} ×
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className="tag-input-wrap">
-        <input
-          type="text"
-          value={tagInput}
-          onChange={e => { setTagInput(e.target.value); setShowDropdown(true) }}
-          onFocus={() => setShowDropdown(true)}
-          onBlur={() => setShowDropdown(false)}
-          onKeyDown={handleTagInputKeyDown}
-          placeholder="Add tag… (Enter to create)"
-          autoComplete="off"
-        />
-        {showDropdown && (filteredTags.length > 0 || tagInput.trim()) ? (
-          <div className="tag-dropdown">
-            {filteredTags.map(tag => (
-              <button
-                key={tag.id}
-                type="button"
-                onMouseDown={e => { e.preventDefault(); handleDropdownSelect(tag) }}
-              >
-                {tag.name}
-              </button>
-            ))}
-            {tagInput.trim() && !allTags.some(t => t.name.toLowerCase() === tagInput.trim().toLowerCase()) ? (
-              <button
-                type="button"
-                onMouseDown={e => {
-                  e.preventDefault()
-                  handleTagInputKeyDown({ key: 'Enter', preventDefault: () => {} })
-                }}
-              >
-                Create &ldquo;{tagInput.trim()}&rdquo;
-              </button>
+      {/* Tags: hidden for shared-note edits — tag management is owner-only */}
+      {sharePermission === null ? (
+        <>
+          <label>Tags</label>
+          {selectedTags.length > 0 ? (
+            <div className="note-card-tags" style={{ marginBottom: '.375rem' }}>
+              {selectedTags.map(tag => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className="tag-pill tag-pill--remove"
+                  onClick={() => handleRemoveTag(tag.id)}
+                >
+                  {tag.name} ×
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="tag-input-wrap">
+            <input
+              type="text"
+              value={tagInput}
+              onChange={e => { setTagInput(e.target.value); setShowDropdown(true) }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setShowDropdown(false)}
+              onKeyDown={handleTagInputKeyDown}
+              placeholder="Add tag… (Enter to create)"
+              autoComplete="off"
+            />
+            {showDropdown && (filteredTags.length > 0 || tagInput.trim()) ? (
+              <div className="tag-dropdown">
+                {filteredTags.map(tag => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); handleDropdownSelect(tag) }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+                {tagInput.trim() && !allTags.some(t => t.name.toLowerCase() === tagInput.trim().toLowerCase()) ? (
+                  <button
+                    type="button"
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      handleTagInputKeyDown({ key: 'Enter', preventDefault: () => {} })
+                    }}
+                  >
+                    Create &ldquo;{tagInput.trim()}&rdquo;
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
-        ) : null}
-      </div>
+        </>
+      ) : null}
 
-      {/* Attach file — available in both create and edit modes.
+      {/* Attachments: hidden for shared-note edits — upload/management is owner-only.
+          Attach file — available in both create and edit modes (owner only).
           Files are validated on pick but uploaded only when Save/Update is clicked.
           In edit mode, × on an existing attachment stages it for deletion on save.
           Cancelling discards all staged changes — the note stays unchanged.
           (rerender-move-effect-to-event) */}
+      {sharePermission === null ? (
       <div className="note-editor-attachments">
         <div className="note-editor-attach-row">
           <button
@@ -277,6 +285,7 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
           </ul>
         ) : null}
       </div>
+      ) : null}
 
       <div className="note-editor-actions">
         <button type="submit" disabled={saving}>

@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import AvatarBubble from './AvatarBubble'
 
 /**
  * Displays a single note with context-appropriate actions.
@@ -21,6 +22,11 @@ import { supabase } from '../lib/supabase'
  * @param {{
  *   note: import('../lib/database.types').Note,
  *   isArchived: boolean,
+ *   isOwner?: boolean,
+ *   sharePermission?: 'view'|'edit'|null,
+ *   onShare?: Function|null,
+ *   ownerName?: string|null,
+ *   ownerAvatarPath?: string|null,
  *   onEdit: Function,
  *   onPin: Function,
  *   onArchive: Function,
@@ -30,7 +36,7 @@ import { supabase } from '../lib/supabase'
  *   onDeleteAttachment: (noteId: number, attachment: object) => void
  * }} props
  */
-export default memo(function NoteCard({ note, isArchived, onEdit, onPin, onArchive, onUnarchive, onDeletePermanent, onTagClick, onDeleteAttachment }) {
+export default memo(function NoteCard({ note, isArchived, isOwner = true, sharePermission = null, onShare = null, ownerName = null, ownerAvatarPath = null, onEdit, onPin, onArchive, onUnarchive, onDeletePermanent, onTagClick, onDeleteAttachment }) {
   // Map<storage_path, blob URL> — populated by authenticated download calls.
   // Keyed by storage_path so the render can look up any attachment's URL in O(1).
   // (js-index-maps)
@@ -39,6 +45,15 @@ export default memo(function NoteCard({ note, isArchived, onEdit, onPin, onArchi
   // when note.note_attachments changes — prevents memory leaks.
   // (rerender-use-ref-transient-values)
   const prevUrlMapRef = useRef(new Map())
+
+  // Blob URL for the note owner's avatar (only populated on shared notes).
+  // Fetched via the authenticated storage download path; revoked on path change.
+  const [ownerAvatarUrl, setOwnerAvatarUrl] = useState(null)
+  const prevOwnerAvatarUrlRef = useRef(null)
+
+  // Three-dots actions dropdown. (rerender-functional-setstate)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
 
   // Download all attachments whenever the list changes.
   // Each download() uses the user's active JWT; the storage SELECT policy is
@@ -77,9 +92,52 @@ export default memo(function NoteCard({ note, isArchived, onEdit, onPin, onArchi
 
     return () => { cancelled = true }
   }, [note.note_attachments])
+
+  // Fetch the note owner's avatar when ownerAvatarPath is provided (shared notes).
+  // avatars_select_shared storage policy allows this download.
+  useEffect(() => {
+    if (prevOwnerAvatarUrlRef.current) {
+      URL.revokeObjectURL(prevOwnerAvatarUrlRef.current)
+      prevOwnerAvatarUrlRef.current = null
+    }
+    if (!ownerAvatarPath) {
+      setOwnerAvatarUrl(null)
+      return
+    }
+    let cancelled = false
+    supabase.storage.from('avatars').download(ownerAvatarPath)
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const url = URL.createObjectURL(data)
+        prevOwnerAvatarUrlRef.current = url
+        setOwnerAvatarUrl(url)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [ownerAvatarPath])
+
+  // Close dropdown on outside click — listener only active while menu is open.
+  // (client-event-listeners)
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [menuOpen])
+
   return (
     <article className={`note-card${note.pinned && !isArchived ? ' note-card--pinned' : ''}`}>
       <div className="note-card-body">
+        {sharePermission !== null ? (
+          <div className="note-card-shared-by">
+            <AvatarBubble avatarUrl={ownerAvatarUrl} displayName={ownerName ?? '?'} size={16} />
+            <span className="note-card-shared-by-label">Shared by {ownerName ?? 'Unknown'}</span>
+          </div>
+        ) : null}
         <h3 className="note-card-title">{note.title}</h3>
         {note.content !== null ? (
           <p className="note-card-content">{note.content}</p>
@@ -123,14 +181,16 @@ export default memo(function NoteCard({ note, isArchived, onEdit, onPin, onArchi
                     {att.file_name}
                   </span>
                 </a>
-                <button
-                  type="button"
-                  className="attachment-delete"
-                  title="Delete attachment"
-                  onClick={() => onDeleteAttachment(note.id, att)}
-                >
-                  ×
-                </button>
+                {isOwner ? (
+                  <button
+                    type="button"
+                    className="attachment-delete"
+                    title="Delete attachment"
+                    onClick={() => onDeleteAttachment(note.id, att)}
+                  >
+                    ×
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -140,51 +200,89 @@ export default memo(function NoteCard({ note, isArchived, onEdit, onPin, onArchi
         <time className="note-card-date" dateTime={note.created_at}>
           {new Date(note.created_at).toLocaleDateString()}
         </time>
-        <div className="note-card-actions">
-          {isArchived ? (
-            <>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => onUnarchive(note.id)}
-              >
-                Unarchive
-              </button>
-              <button
-                type="button"
-                className="btn-danger"
-                onClick={() => onDeletePermanent(note.id)}
-              >
-                Delete
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className={`btn-secondary note-card-pin${note.pinned ? ' note-card-pin--active' : ''}`}
-                title={note.pinned ? 'Unpin note' : 'Pin note'}
-                onClick={() => onPin(note.id, note.pinned)}
-              >
-                📌
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => onEdit(note)}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => onArchive(note.id)}
-              >
-                Archive
-              </button>
-            </>
-          )}
-        </div>
+        {/* Hide the ··· trigger entirely when no actions exist for this viewer.
+            View-only sharees have nothing to act on. (rendering-conditional-render) */}
+        {(isArchived ? isOwner : isOwner || sharePermission === 'edit') ? (
+          <div className="note-card-menu" ref={menuRef}>
+            <button
+              type="button"
+              className="btn-secondary note-card-menu-trigger"
+              aria-label="Note actions"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              onClick={() => setMenuOpen(o => !o)}
+            >
+              ···
+            </button>
+            {menuOpen ? (
+              <div className="note-card-menu-dropdown" role="menu">
+                {isArchived ? (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="note-card-menu-item"
+                      onClick={() => { onUnarchive(note.id); setMenuOpen(false) }}
+                    >
+                      Unarchive
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="note-card-menu-item note-card-menu-item--danger"
+                      onClick={() => { onDeletePermanent(note.id); setMenuOpen(false) }}
+                    >
+                      Delete permanently
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {isOwner && onShare !== null ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="note-card-menu-item"
+                        onClick={() => { onShare(note.id); setMenuOpen(false) }}
+                      >
+                        Share
+                      </button>
+                    ) : null}
+                    {isOwner ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`note-card-menu-item${note.pinned ? ' note-card-menu-item--active' : ''}`}
+                        onClick={() => { onPin(note.id, note.pinned); setMenuOpen(false) }}
+                      >
+                        {note.pinned ? '📌 Unpin' : '📌 Pin'}
+                      </button>
+                    ) : null}
+                    {isOwner || sharePermission === 'edit' ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="note-card-menu-item"
+                        onClick={() => { onEdit(note); setMenuOpen(false) }}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                    {isOwner ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="note-card-menu-item"
+                        onClick={() => { onArchive(note.id); setMenuOpen(false) }}
+                      >
+                        Archive
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </footer>
     </article>
   )

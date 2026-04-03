@@ -19,12 +19,12 @@ button {
 }
 
 button[type="submit"],
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile) {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile):not(.note-card-menu-item):not(.note-card-menu-trigger) {
   background: var(--primary);
   color: #fff;
 }
 button[type="submit"]:hover,
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile):hover {
+button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile):not(.note-card-menu-item):not(.note-card-menu-trigger):hover {
   background: var(--primary-hover);
 }
 button:disabled {
@@ -507,29 +507,55 @@ button:disabled {
   color: var(--text-muted);
 }
 
-.note-card-actions {
-  display: flex;
-  gap: .375rem;
+/* Three-dots actions dropdown — anchored to the card footer */
+.note-card-menu {
+  position: relative;
 }
 
-.note-card-actions button {
-  font-size: .75rem;
+.note-card-menu-trigger {
+  font-size: .875rem;
   padding: .25rem .625rem;
+  letter-spacing: .1em;
 }
 
-/* Pin toggle button — inherits size from .note-card-actions button above */
-.note-card-pin {
-  font-size: .8125rem;  /* slightly larger so the emoji is legible */
-  opacity: .45;
-  transition: opacity .15s, color .15s, border-color .15s;
+.note-card-menu-dropdown {
+  position: absolute;
+  bottom: calc(100% + .375rem); /* opens upward — avoids viewport clipping in a card grid */
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+  z-index: 50;
+  overflow: hidden;
 }
-.note-card-pin:hover {
-  opacity: .75;
+
+.note-card-menu-item {
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  font-size: .875rem;
+  font-weight: 400;
+  padding: .5rem .875rem;
+  text-align: left;
+  width: 100%;
+  transition: background .1s;
 }
-.note-card-pin--active {
+.note-card-menu-item:hover {
+  background: var(--bg);
+}
+.note-card-menu-item--active {
   color: var(--primary);
-  border-color: var(--primary);
-  opacity: 1;
+}
+.note-card-menu-item--danger {
+  color: var(--danger);
+}
+.note-card-menu-item--danger:hover {
+  background: rgba(220, 38, 38, .08);
 }
 
 /* ---------------------------------------------------------------------------
@@ -885,4 +911,156 @@ button:disabled {
 .avatar-editor-circle {
   width: 80px;
   height: 80px;
+}
+
+/* ---------------------------------------------------------------------------
+   Small button modifier — used in compact lists (e.g. share-row revoke)
+   --------------------------------------------------------------------------- */
+.btn-small {
+  font-size: .75rem;
+  padding: .25rem .625rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Share panel — modal for note owners to manage shares
+   --------------------------------------------------------------------------- */
+.share-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.share-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .24);
+  padding: 1.5rem;
+  width: min(480px, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.share-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.share-panel-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.share-panel-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: .25rem .5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.share-panel-close:hover {
+  color: var(--text);
+}
+
+.share-panel-form {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+.share-panel-email {
+  flex: 1;
+  min-width: 0;
+  padding: .5rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: .875rem;
+}
+.share-panel-email:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.share-panel-permission-select {
+  padding: .5rem .625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: .875rem;
+  cursor: pointer;
+}
+
+.share-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: .625rem;
+}
+
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  padding: .5rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.share-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .125rem;
+  overflow: hidden;
+}
+
+.share-row-name {
+  font-size: .875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-row-email {
+  font-size: .75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-panel-permission-select--inline {
+  font-size: .75rem;
+  padding: .25rem .5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Note card — shared-by label (sharee view)
+   --------------------------------------------------------------------------- */
+.note-card-shared-by {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  margin-bottom: .375rem;
+}
+
+.note-card-shared-by-label {
+  font-size: .75rem;
+  color: var(--text-muted);
 }

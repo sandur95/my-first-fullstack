@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useTransition } from 'react'
 import { useNotes } from '../hooks/useNotes'
+import { useSharedNotes } from '../hooks/useSharedNotes'
 import { uploadAttachment } from '../hooks/useAttachmentUpload'
 import { useProfile } from '../hooks/useProfile'
 import { useTags } from '../hooks/useTags'
@@ -8,6 +9,7 @@ import NoteEditor from './NoteEditor'
 import ProfileEditor from './ProfileEditor'
 import NoteCard from './NoteCard'
 import AvatarBubble from './AvatarBubble'
+import SharePanel from './SharePanel'
 
 /**
  * Authenticated main view — composites NoteEditor + NoteCard list.
@@ -25,7 +27,8 @@ import AvatarBubble from './AvatarBubble'
  */
 export default function NotesList({ userId, userEmail, onSignOut }) {
   // Derive tab during render — no extra useState needed (rerender-derived-state-no-effect)
-  // view === 'archive' drives the archive tab; all other views use the active tab.
+  // view === 'archive' drives the archive tab; 'shared' drives the shared-with-me section;
+  // all other views use the active tab.
   const [view, setView] = useState('list')
   const tab = view === 'archive' ? 'archive' : 'active'
 
@@ -37,8 +40,11 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const [toastMessage, setToastMessage] = useState(null)
   const toastTimeoutRef = useRef(null)
   const [isPending, startTransition] = useTransition()
+  // Which note's SharePanel is currently open (null = closed).
+  const [sharingNoteId, setSharingNoteId] = useState(null)
 
   const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags, fetchNotes, addAttachmentToNote, removeAttachmentFromNote } = useNotes(userId, tab, debouncedSearch)
+  const { sharedNotes, loading: sharedLoading, error: sharedError, fetchSharedNotes, updateSharedNote } = useSharedNotes(userId)
   const { fullName, avatarUrl, isUploading, uploadAvatar, updateFullName } = useProfile(userId)
   const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
@@ -50,6 +56,14 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     setSaving(true)
     setSaveError(null)
     try {
+      // Shared-note edit: only title + content; RLS enforces edit permission at DB level.
+      if (editingNote !== null && editingNote.sharePermission) {
+        const err = await updateSharedNote(editingNote.id, { title, content })
+        if (err) throw new Error(err)
+        setEditingNote(null)
+        setView('shared')
+        return
+      }
       if (editingNote !== null) {
         // Run all independent operations in parallel. (async-parallel)
         // Uploads and deletes are non-fatal — note title/content/tags save regardless.
@@ -134,10 +148,17 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   }, [])
 
   function handleCancel() {
+    const returnView = editingNote?.sharePermission ? 'shared' : 'list'
     setEditingNote(null)
     setSaveError(null)
-    setView('list')
+    setView(returnView)
   }
+
+  const handleSharedEdit = useCallback((note) => {
+    setEditingNote(note)
+    setSaveError(null)
+    setView('edit')
+  }, [])
 
   const handleTagClick = useCallback((tagId) => {
     // Toggle: clicking the active tag clears the filter
@@ -179,6 +200,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   // Derived during render — which overlay is active (rerender-derived-state-no-effect)
   const showEditor = view === 'compose' || view === 'edit'
   const showProfile = view === 'profile'
+  const showShared = view === 'shared'
   // Client-side tag filter — applied after fetch (small personal dataset)
   const displayedNotes = activeTagId !== null
     ? notes.filter(n => n.note_tags?.some(nt => nt.tag_id === activeTagId))
@@ -186,6 +208,10 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
 
   return (
     <div className="notes-layout">
+      {/* SharePanel modal — rendered above everything when a note is being shared */}
+      {sharingNoteId !== null ? (
+        <SharePanel noteId={sharingNoteId} onClose={() => setSharingNoteId(null)} />
+      ) : null}
       <header className="notes-header">
         <span className="notes-logo">Notes</span>
         <div className="notes-header-right">
@@ -226,6 +252,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
             allTags={tags}
             onCreateTag={createTag}
             userId={userId}
+            sharePermission={editingNote?.sharePermission ?? null}
           />
         ) : showProfile ? (
           <ProfileEditor
@@ -237,6 +264,67 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
             onCancel={handleCancel}
             saving={saving}
           />
+        ) : showShared ? (
+          // Shared with me — notes owned by others, shared to this user
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="notes-tab-bar">
+              <button
+                type="button"
+                className="notes-tab"
+                onClick={() => { setSaveError(null); startTransition(() => { setView('list'); fetchNotes('active') }) }}
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                className="notes-tab"
+                onClick={() => { setSaveError(null); startTransition(() => { clearSearch(); setView('archive'); fetchNotes('archive') }) }}
+              >
+                Archived
+              </button>
+              <button
+                type="button"
+                className="notes-tab notes-tab--active"
+              >
+                Shared with me
+              </button>
+            </div>
+            <div className="notes-list-header">
+              <h2 className="notes-list-title">
+                {sharedNotes.length === 0
+                  ? 'No notes shared with you'
+                  : `${sharedNotes.length} shared note${sharedNotes.length === 1 ? '' : 's'}`}
+              </h2>
+            </div>
+            {sharedLoading && sharedNotes.length === 0 ? (
+              <p className="centered-status">Loading…</p>
+            ) : sharedError !== null ? (
+              <p className="form-error" role="alert">{sharedError}</p>
+            ) : sharedNotes.length === 0 ? (
+              <p className="empty-state">Notes shared with you will appear here.</p>
+            ) : (
+              <div className="notes-grid">
+                {sharedNotes.map(note => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    isArchived={false}
+                    isOwner={false}
+                    sharePermission={note.sharePermission}
+                    ownerName={note.owner?.full_name ?? null}
+                    ownerAvatarPath={note.owner?.avatar_path ?? null}
+                    onEdit={note.sharePermission === 'edit' ? handleSharedEdit : () => {}}
+                    onPin={() => {}}
+                    onArchive={() => {}}
+                    onUnarchive={() => {}}
+                    onDeletePermanent={() => {}}
+                    onTagClick={() => {}}
+                    onDeleteAttachment={() => {}}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         ) : (loading && notes.length === 0 && !debouncedSearch) ? (
           <p className="centered-status">Loading notes…</p>
         ) : (
@@ -271,6 +359,20 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                 }}
               >
                 Archived
+              </button>
+              <button
+                type="button"
+                className="notes-tab"
+                onClick={() => {
+                  setSaveError(null)
+                  startTransition(async () => {
+                    clearSearch()
+                    setView('shared')
+                    await fetchSharedNotes()
+                  })
+                }}
+              >
+                Shared with me
               </button>
             </div>
 
@@ -347,6 +449,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                       key={note.id}
                       note={note}
                       isArchived={tab === 'archive'}
+                      isOwner={true}
+                      onShare={tab === 'active' ? (id) => setSharingNoteId(id) : null}
                       onEdit={handleEdit}
                       onPin={handlePin}
                       onArchive={handleArchive}
