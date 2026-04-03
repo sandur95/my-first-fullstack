@@ -84,6 +84,7 @@ button:disabled {
 .note-card--pinned,
 .note-editor,
 .notes-search-input,
+.note-attachments,
 .form-error,
 .form-message {
   transition: background-color 0.2s ease, color 0.2s ease,
@@ -529,6 +530,158 @@ button:disabled {
   color: var(--primary);
   border-color: var(--primary);
   opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Note card — attachments section
+   Displayed below tags, above the card footer.
+   Images: 48×48 thumbnail. PDFs: 📄 icon. Both show the filename and a × button.
+   --------------------------------------------------------------------------- */
+.note-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+  margin-top: .375rem;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  font-size: .75rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .25rem .375rem;
+  overflow: hidden;
+}
+
+/* 48×48 thumbnail for image attachments */
+.attachment-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: calc(var(--radius) - 2px);
+  flex-shrink: 0;
+  background: var(--border); /* fallback while loading */
+}
+
+/* PDF icon — same visual weight as a thumbnail */
+.attachment-pdf-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+/* Filename — truncates with ellipsis, fills available space */
+.attachment-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Clickable wrapper around the thumbnail/icon + filename in NoteCard.
+   Uses flex so the image and name stay inline, occupying the available width.
+   The delete button sits outside this link so it remains independently clickable. */
+.attachment-link {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.attachment-link:hover .attachment-name {
+  text-decoration: underline;
+}
+
+/* Skeleton placeholder shown while the signed URL is being fetched.
+   Same dimensions as .attachment-thumb so the card height doesn't jump. */
+.attachment-thumb--loading {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* × delete button — small, appears at the right of each attachment item */
+.attachment-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: .875rem;
+  line-height: 1;
+  padding: .125rem .25rem;
+  flex-shrink: 0;
+  border-radius: calc(var(--radius) - 2px);
+  transition: color .15s, background .15s;
+}
+.attachment-delete:hover {
+  color: var(--danger);
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   NoteEditor — attachments section
+   Shown below the tags row when editing an existing note.
+   --------------------------------------------------------------------------- */
+.note-editor-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+}
+
+.note-editor-attach-row {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+}
+
+.note-editor-attach-hint {
+  font-size: .75rem;
+  color: var(--text-muted);
+}
+
+.note-editor-attachment-list {
+  list-style: none;
+  padding: 0;
+  margin: .125rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+
+.note-editor-attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .375rem;
+  font-size: .8125rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .25rem .5rem;
+}
+
+/* Filename inside the editor list */
+.note-editor-attachment-item .attachment-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-size: .8125rem;
 }
 
 /* ---------------------------------------------------------------------------

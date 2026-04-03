@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useTransition } from 'react'
+import { useState, useEffect, useCallback, useTransition, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 /**
@@ -6,8 +6,9 @@ import { supabase } from '../lib/supabase'
  * including avatar upload to the private "avatars" storage bucket.
  *
  * Avatar design decisions:
- *  - Never persists signed URLs to the database; only avatar_path is stored.
- *  - Signed URLs are generated at display time with a 1-hour TTL.
+ *  - Never persists URLs to the database; only avatar_path is stored.
+ *  - Avatar is fetched via download() at display time — the storage SELECT policy
+ *    is re-checked on every call using the user's active JWT. No shareable token.
  *  - useTransition provides isUploading without a manual useState bool.
  *    (rendering-usetransition-loading)
  *  - uploadAvatar calls onPreviewReady(blobUrl) synchronously so the caller
@@ -26,8 +27,16 @@ export function useProfile(userId) {
   // isPending resets automatically even if the transition throws.
   // (rendering-usetransition-loading)
   const [isUploading, startUploadTransition] = useTransition()
+  // Tracks the current avatar blob URL so it can be revoked when replaced.
+  // (rerender-use-ref-transient-values)
+  const avatarBlobUrlRef = useRef(null)
 
-  // Fetch profile + generate signed URL on mount / userId change.
+  // Revoke the avatar blob URL on unmount to free memory.
+  useEffect(() => () => {
+    if (avatarBlobUrlRef.current) URL.revokeObjectURL(avatarBlobUrlRef.current)
+  }, [])
+
+  // Fetch profile on mount / userId change.
   useEffect(() => {
     if (!userId) return
     supabase
@@ -39,10 +48,15 @@ export function useProfile(userId) {
         if (!data) return
         setFullName(data.full_name)
         if (data.avatar_path) {
-          const { data: signed } = await supabase.storage
+          const { data: blob } = await supabase.storage
             .from('avatars')
-            .createSignedUrl(data.avatar_path, 3600)
-          if (signed) setAvatarUrl(signed.signedUrl)
+            .download(data.avatar_path)
+          if (blob) {
+            if (avatarBlobUrlRef.current) URL.revokeObjectURL(avatarBlobUrlRef.current)
+            const url = URL.createObjectURL(blob)
+            avatarBlobUrlRef.current = url
+            setAvatarUrl(url)
+          }
         }
       })
   }, [userId])
@@ -85,11 +99,16 @@ export function useProfile(userId) {
           .eq('id', userId)
         if (dbErr) throw dbErr
 
-        // Generate a fresh signed URL and update React state.
-        const { data: signed } = await supabase.storage
+        // Download the uploaded file and derive a blob URL — no shareable token.
+        const { data: blob } = await supabase.storage
           .from('avatars')
-          .createSignedUrl(filePath, 3600)
-        if (signed) setAvatarUrl(signed.signedUrl)
+          .download(filePath)
+        if (blob) {
+          if (avatarBlobUrlRef.current) URL.revokeObjectURL(avatarBlobUrlRef.current)
+          const url = URL.createObjectURL(blob)
+          avatarBlobUrlRef.current = url
+          setAvatarUrl(url)
+        }
       } finally {
         // Always revoke the blob URL to free memory.
         URL.revokeObjectURL(blobUrl)

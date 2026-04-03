@@ -74,7 +74,7 @@ export function useNotes(userId, tab = 'active', search = '') {
     // so hasMore can be derived without a separate COUNT query. (data-pagination)
     let query = supabase
       .from('notes')
-      .select('*, note_tags(tag_id, tags(id, name))', { count: 'exact' })
+      .select('*, note_tags(tag_id, tags(id, name)), note_attachments(id, storage_path, file_name, mime_type, file_size)', { count: 'exact' })
       .eq('user_id', userId)
     if (effectiveTab === 'archive') {
       query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
@@ -157,43 +157,63 @@ export function useNotes(userId, tab = 'active', search = '') {
             })
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new
+            // archived_at is either a timestamp string (truthy) or null/undefined (falsy).
+            // Using truthy/falsy guards instead of strict === null because Supabase Realtime
+            // may deliver archived_at as undefined (field omitted) rather than explicit null
+            // when the column is set back to NULL.  Both undefined and null mean "not archived".
+            //
             // Tab-switch cases are handled synchronously — no tag fetch needed.
             // Note moved out of the current tab (archive/unarchive) → remove immediately.
-            if (currentTab === 'active' && updated.archived_at !== null) {
+            if (currentTab === 'active' && updated.archived_at) {
+              // Note archived — archived_at became a timestamp; remove from active list.
               setNotes(prev => prev.filter(n => n.id !== updated.id))
-            } else if (currentTab === 'archive' && updated.archived_at === null) {
+            } else if (currentTab === 'archive' && !updated.archived_at) {
+              // Note unarchived — archived_at became null/undefined; remove from archive list.
               setNotes(prev => prev.filter(n => n.id !== updated.id))
             } else {
-              // In-place update: fetch fresh note_tags so tag changes from other tabs
-              // are reflected without a full refetch. tabRef is re-read inside setNotes
-              // to guard against a tab change during the in-flight fetch.
-              // (rerender-use-ref-transient-values)
-              supabase
-                .from('note_tags')
-                .select('tag_id, tags(id, name)')
-                .eq('note_id', updated.id)
-                .then(({ data: tagData }) => {
-                  setNotes(prev => {
-                    if (!prev.some(n => n.id === updated.id)) return prev
-                    const cur = tabRef.current
-                    // Re-check tab after async gap
-                    if (cur === 'active' && updated.archived_at !== null) {
-                      return prev.filter(n => n.id !== updated.id)
+              // In-place update (note stays in current tab), OR note entering current tab
+              // from the other side (e.g. another tab unarchived a note while we're on active).
+              // Fetch fresh note_tags AND note_attachments in parallel so tag changes and
+              // attachment deletions from other tabs are reflected without a full refetch.
+              // tabRef is re-read inside setNotes to guard against a tab change during fetches.
+              // (async-parallel, rerender-use-ref-transient-values)
+              Promise.all([
+                supabase.from('note_tags').select('tag_id, tags(id, name)').eq('note_id', updated.id),
+                supabase.from('note_attachments').select('id, storage_path, file_name, mime_type, file_size').eq('note_id', updated.id),
+              ]).then(([{ data: tagData }, { data: attachData }]) => {
+                setNotes(prev => {
+                  const cur = tabRef.current
+                  // Re-check tab after async gap (user may have switched tabs).
+                  if (cur === 'active' && updated.archived_at) {
+                    return prev.filter(n => n.id !== updated.id)
+                  }
+                  if (cur === 'archive' && !updated.archived_at) {
+                    return prev.filter(n => n.id !== updated.id)
+                  }
+                  // Note not in list yet: insert if it now belongs here.
+                  // Happens when another tab unarchives a note — the active tab
+                  // receives the UPDATE but the note was never in its list.
+                  // Skip while searching — can't validate the note against the
+                  // current FTS query client-side. (rerender-functional-setstate)
+                  if (!prev.some(n => n.id === updated.id)) {
+                    if (cur === 'active' && !updated.archived_at && !searchRef.current) {
+                      const newNote = { ...updated, note_tags: tagData ?? [], note_attachments: attachData ?? [] }
+                      return [...prev, newNote]
+                        .toSorted((a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at))
                     }
-                    if (cur === 'archive' && updated.archived_at === null) {
-                      return prev.filter(n => n.id !== updated.id)
-                    }
-                    const sort = cur === 'archive'
-                      ? (a, b) => new Date(b.archived_at) - new Date(a.archived_at)
-                      : (a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at)
                     return prev
-                      .map(n => n.id === updated.id
-                        ? { ...updated, note_tags: tagData ?? n.note_tags }
-                        : n
-                      )
-                      .toSorted(sort)
-                  })
+                  }
+                  const sort = cur === 'archive'
+                    ? (a, b) => new Date(b.archived_at) - new Date(a.archived_at)
+                    : (a, b) => b.pinned - a.pinned || new Date(b.created_at) - new Date(a.created_at)
+                  return prev
+                    .map(n => n.id === updated.id
+                      ? { ...updated, note_tags: tagData ?? n.note_tags, note_attachments: attachData ?? n.note_attachments }
+                      : n
+                    )
+                    .toSorted(sort)
                 })
+              })
             }
           } else if (payload.eventType === 'DELETE') {
             // payload.old contains only the PK (id) without REPLICA IDENTITY FULL
@@ -206,6 +226,56 @@ export function useNotes(userId, tab = 'active', search = '') {
     return () => { supabase.removeChannel(channel) }
   }, [userId])
 
+  // Realtime subscription for note_attachments — keeps attachment lists in sync
+  // across tabs without requiring a full note refetch.
+  //
+  // REPLICA IDENTITY FULL is set on note_attachments (migration 20260402000002) so
+  // payload.old on DELETE contains all columns, including note_id.
+  // The channel is keyed by userId and is only (re)created on login/logout.
+  // (rerender-use-ref-transient-values, rerender-functional-setstate)
+  //
+  // Only INSERT events are handled here.  DELETE sync is driven via the notes
+  // Realtime channel instead: removeAttachmentFromNote touches notes.updated_at
+  // after every deletion, which fires a notes UPDATE event that all tabs receive.
+  // That UPDATE handler fetches fresh note_attachments from the DB, giving Tab 2
+  // the authoritative post-deletion list.
+  //
+  // Why not use the note_attachments Realtime DELETE event?
+  // Supabase Realtime authorises DELETE event delivery by running a SELECT on the
+  // live table with the subscribing user's JWT.  The row is already gone by then,
+  // so the SELECT returns 0 rows, the auth check "fails", and the event is silently
+  // dropped on all tabs except the one that initiated the delete.  REPLICA IDENTITY
+  // FULL ensures payload.old has all columns, but the local Realtime server still
+  // does a live-table lookup rather than evaluating the policy against WAL data.
+  useEffect(() => {
+    if (!userId) return
+
+    const attachmentChannel = supabase
+      .channel(`note_attachments:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'note_attachments',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new
+          setNotes(prev => prev.map(n => {
+            if (n.id !== row.note_id) return n
+            // Deduplicate: addAttachmentToNote / handleSave may have already
+            // appended this row optimistically before Realtime fires.
+            if ((n.note_attachments ?? []).some(a => a.id === row.id)) return n
+            return { ...n, note_attachments: [...(n.note_attachments ?? []), row] }
+          }))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(attachmentChannel) }
+  }, [userId])
+
   /**
    * Fetches the next page and appends it to the existing list.
    * Only callable when hasMore is true; never called during a search.
@@ -216,7 +286,7 @@ export function useNotes(userId, tab = 'active', search = '') {
     setError(null)
     let query = supabase
       .from('notes')
-      .select('*, note_tags(tag_id, tags(id, name))', { count: 'exact' })
+      .select('*, note_tags(tag_id, tags(id, name)), note_attachments(id, storage_path, file_name, mime_type, file_size)', { count: 'exact' })
       .eq('user_id', userId)
     if (tab === 'archive') {
       query = query.not('archived_at', 'is', null).order('archived_at', { ascending: false })
@@ -274,8 +344,8 @@ export function useNotes(userId, tab = 'active', search = '') {
       .select()
       .single()
     if (error) throw error
-    // Preserve existing note_tags — update only changed title/content
-    setNotes(prev => prev.map(n => (n.id === id ? { ...data, note_tags: n.note_tags } : n)))
+    // Preserve existing note_tags and note_attachments — update only changed title/content
+    setNotes(prev => prev.map(n => (n.id === id ? { ...data, note_tags: n.note_tags, note_attachments: n.note_attachments } : n)))
   }, [])
 
   /**
@@ -311,10 +381,24 @@ export function useNotes(userId, tab = 'active', search = '') {
    * @returns {Promise<void>}
    */
   const deleteNote = useCallback(async (id) => {
+    // Capture storage paths and a snapshot before optimistically removing the note.
+    // note_attachments are always loaded alongside each note row (no separate pagination).
+    let storagePaths = []
+    let snapshot
+    setNotes(prev => {
+      snapshot = prev
+      const note = prev.find(n => n.id === id)
+      storagePaths = (note?.note_attachments ?? []).map(a => a.storage_path)
+      return prev.filter(n => n.id !== id)
+    })
     const { error } = await supabase.from('notes').delete().eq('id', id)
-    if (error) throw error
-    // Remove by id — functional update
-    setNotes(prev => prev.filter(n => n.id !== id))
+    if (error) { setNotes(snapshot); throw error }
+    // ON DELETE CASCADE already removed all note_attachments rows in the DB.
+    // Now clean up the storage objects. Fire-and-forget — a missed deletion leaves
+    // orphaned objects that are permanently inaccessible (no DB row → no signed URL).
+    if (storagePaths.length > 0) {
+      supabase.storage.from('attachments').remove(storagePaths).then(null, () => {})
+    }
   }, [])
 
   /**
@@ -394,5 +478,69 @@ export function useNotes(userId, tab = 'active', search = '') {
     )
   }, [])
 
-  return { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags, fetchNotes }
+  /**
+   * Appends a newly-uploaded attachment row to a note's local attachment list.
+   * Called by NotesList after a successful upload to update list state immediately.
+   * Functional setNotes — no stale-closure risk. (rerender-functional-setstate)
+   *
+   * @param {number} noteId
+   * @param {object} row - The inserted note_attachments row
+   */
+  const addAttachmentToNote = useCallback((noteId, row) => {
+    setNotes(prev => prev.map(n =>
+      n.id === noteId
+        ? { ...n, note_attachments: [...(n.note_attachments ?? []), row] }
+        : n
+    ))
+  }, [])
+
+  /**
+   * Optimistically removes an attachment from local state, then deletes the
+   * storage object and the metadata row.  Restores the snapshot on any error.
+   * (rerender-functional-setstate)
+   *
+   * Deletes storage first so that if the DB delete fails we don't end up with
+   * a live DB row pointing at a deleted file.
+   *
+   * @param {number} noteId
+   * @param {{ id: number, storage_path: string }} attachment
+   */
+  const removeAttachmentFromNote = useCallback(async (noteId, attachment) => {
+    let snapshot
+    setNotes(prev => {
+      snapshot = prev
+      return prev.map(n =>
+        n.id === noteId
+          ? { ...n, note_attachments: (n.note_attachments ?? []).filter(a => a.id !== attachment.id) }
+          : n
+      )
+    })
+    try {
+      const { error: storageErr } = await supabase.storage
+        .from('attachments')
+        .remove([attachment.storage_path])
+      if (storageErr) throw storageErr
+
+      const { error: dbErr } = await supabase
+        .from('note_attachments')
+        .delete()
+        .eq('id', attachment.id)
+      if (dbErr) throw dbErr
+    } catch (err) {
+      setNotes(snapshot)
+      throw err
+    }
+
+    // Touch notes.updated_at so all other tabs receive a notes Realtime UPDATE
+    // event and re-fetch note_attachments from the DB — this is the reliable
+    // cross-tab deletion sync path (see channel comment above).
+    // Fire-and-forget: the delete already succeeded; sync failure is non-fatal.
+    supabase
+      .from('notes')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', noteId)
+      .then(null, () => {})
+  }, [])
+
+  return { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, deleteNote, pinNote, archiveNote, unarchiveNote, updateNoteTags, fetchNotes, addAttachmentToNote, removeAttachmentFromNote }
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useTransition } from 'react'
 import { useNotes } from '../hooks/useNotes'
+import { uploadAttachment } from '../hooks/useAttachmentUpload'
 import { useProfile } from '../hooks/useProfile'
 import { useTags } from '../hooks/useTags'
 import ThemeToggle from './ThemeToggle'
@@ -37,7 +38,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const toastTimeoutRef = useRef(null)
   const [isPending, startTransition] = useTransition()
 
-  const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags, fetchNotes } = useNotes(userId, tab, debouncedSearch)
+  const { notes, loading, error, loadingMore, loadMore, hasMore, createNote, updateNote, pinNote, archiveNote, unarchiveNote, deleteNote, updateNoteTags, fetchNotes, addAttachmentToNote, removeAttachmentFromNote } = useNotes(userId, tab, debouncedSearch)
   const { fullName, avatarUrl, isUploading, uploadAvatar, updateFullName } = useProfile(userId)
   const { tags, createTag } = useTags(userId)
   const [editingNote, setEditingNote] = useState(null)
@@ -45,18 +46,38 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
   const [saveError, setSaveError] = useState(null)
   const [activeTagId, setActiveTagId] = useState(null)
 
-  async function handleSave({ title, content, tagIds }) {
+  async function handleSave({ title, content, tagIds, pendingFiles, pendingDeletes }) {
     setSaving(true)
     setSaveError(null)
     try {
       if (editingNote !== null) {
+        // Run all independent operations in parallel. (async-parallel)
+        // Uploads and deletes are non-fatal — note title/content/tags save regardless.
         await Promise.all([
           updateNote(editingNote.id, { title, content }),
           updateNoteTags(editingNote.id, tagIds, tags),
+          ...(pendingFiles ?? []).map(file =>
+            uploadAttachment({ file, noteId: editingNote.id, userId })
+              .then(row => addAttachmentToNote(editingNote.id, row))
+              .catch(() => showToast(`Failed to attach "${file.name}" — please re-attach it.`))
+          ),
+          ...(pendingDeletes ?? []).map(att =>
+            removeAttachmentFromNote(editingNote.id, att)
+              .catch(() => showToast(`Failed to remove "${att.file_name}" — please try again.`))
+          ),
         ])
       } else {
         const newId = await createNote(userId, { title, content })
         await updateNoteTags(newId, tagIds, tags)
+        // Create mode: serial upload — noteId only known after createNote.
+        for (const file of (pendingFiles ?? [])) {
+          try {
+            const row = await uploadAttachment({ file, noteId: newId, userId })
+            addAttachmentToNote(newId, row)
+          } catch {
+            showToast(`Failed to attach "${file.name}" — please re-attach it.`)
+          }
+        }
       }
       setEditingNote(null)
       setView('list')
@@ -122,6 +143,19 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
     // Toggle: clicking the active tag clears the filter
     setActiveTagId(prev => (prev === tagId ? null : tagId))
   }, [])
+
+  /**
+   * Optimistically removes an attachment from both the notes list and (if the
+   * editor is open) the editor's localAttachments via the parent state that
+   * NoteEditor reads on next open.  Shows a toast on error.
+   */
+  const handleDeleteAttachment = useCallback(async (noteId, attachment) => {
+    try {
+      await removeAttachmentFromNote(noteId, attachment)
+    } catch (err) {
+      showToast(err.message)
+    }
+  }, [removeAttachmentFromNote, showToast])
 
   function clearSearch() {
     clearTimeout(debounceRef.current)
@@ -191,6 +225,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
             saving={saving}
             allTags={tags}
             onCreateTag={createTag}
+            userId={userId}
           />
         ) : showProfile ? (
           <ProfileEditor
@@ -318,6 +353,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                       onUnarchive={handleUnarchive}
                       onDeletePermanent={handleDelete}
                       onTagClick={handleTagClick}
+                      onDeleteAttachment={handleDeleteAttachment}
                     />
                   ))}
                 </div>
