@@ -85,7 +85,7 @@ export default function AuthForm() {
             minLength={6}
           />
 
-          <button type="submit" disabled={loading}>
+          <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Please wait…' : isSignup ? 'Create account' : 'Sign in'}
           </button>
         </form>

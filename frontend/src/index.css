@@ -1,5 +1,5 @@
 /* =============================================================================
-   Design tokens + base reset
+   Design tokens + base reset — Soft & Warm Teal theme
    ============================================================================= */
 
 *, *::before, *::after {
@@ -7,23 +7,63 @@
 }
 
 :root {
-  /* Colours */
-  --bg:           #f5f5f7;
+  /* Colours — warm light palette */
+  --bg:           #faf9f7;
   --surface:      #ffffff;
-  --border:       #e2e2e7;
-  --text:         #1c1c1e;
-  --text-muted:   #6e6e73;
-  --primary:      #2563eb;
-  --primary-hover:#1d4ed8;
+  --border:       #e7e4de;
+  --text:         #1c1917;
+  --text-muted:   #78716c;
+  --primary:      #0d9488;
+  --primary-hover:#0f766e;
   --danger:       #dc2626;
   --danger-hover: #b91c1c;
 
-  /* Spacing & shape */
-  --radius:  8px;
-  --shadow:  0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+  /* Gradient for primary interactive elements */
+  --gradient-primary: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+
+  /* Frosted-glass header surface */
+  --surface-header: rgba(255, 255, 255, .85);
+
+  /* Feedback surface colours */
+  --surface-danger: #fef2f2;
+  --border-danger:  #fecaca;
+  --surface-info:   #f0fdfa;
+  --border-info:    #99f6e4;
+
+  /* Spacing scale — 4/8px grid */
+  --space-1: .25rem;   /*  4px */
+  --space-2: .5rem;    /*  8px */
+  --space-3: .75rem;   /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+
+  /* Typography scale */
+  --text-xs:   .75rem;   /* 12px — metadata, dates, chips */
+  --text-sm:   .875rem;  /* 14px — labels, secondary, buttons */
+  --text-base: 1rem;     /* 16px — body, card titles */
+  --text-lg:   1.125rem; /* 18px — section headings / logo */
+  --text-xl:   1.5rem;   /* 24px — auth page title */
+
+  /* Avatar sizes */
+  --avatar-xs: 1rem;    /* 16px — inline shared-by label */
+  --avatar-sm: 1.25rem; /* 20px — header bubble */
+  --avatar-md: 3rem;    /* 48px — attachment thumbnail slot */
+  --avatar-lg: 5rem;    /* 80px — profile editor */
+
+  /* Shape scale */
+  --radius:    12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+
+  /* Shadow scale */
+  --shadow:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.09), 0 2px 6px rgba(0,0,0,.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.08);
 
   /* Typography */
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.5;
   color: var(--text);
@@ -33,45 +73,69 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:           #1c1c1e;
-    --surface:      #2c2c2e;
-    --border:       #3a3a3c;
-    --text:         #f2f2f7;
-    --text-muted:   #aeaeb2;
-    --primary:      #3b82f6;
-    --primary-hover:#60a5fa;
-    --danger:       #f87171;
-    --danger-hover: #fca5a5;
-    --shadow:       0 1px 3px rgba(0,0,0,.4);
+    --bg:             #1c1917;
+    --surface:        #292524;
+    --border:         #44403c;
+    --text:           #fafaf9;
+    --text-muted:     #a8a29e;
+    --primary:        #2dd4bf;
+    --primary-hover:  #5eead4;
+    --danger:         #f87171;
+    --danger-hover:   #fca5a5;
+    --gradient-primary: linear-gradient(135deg, #2dd4bf 0%, #0d9488 100%);
+    --surface-header: rgba(41, 37, 36, .85);
+    --shadow:         0 1px 4px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+    --shadow-md:      0 4px 16px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25);
+    --shadow-lg:      0 8px 32px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3);
+    --surface-danger: #450a0a;
+    --border-danger:  #991b1b;
+    --surface-info:   #134e4a;
+    --border-info:    #0f766e;
   }
 }
 
 /* Manual theme override — set by the inline script in index.html and toggled
    by useTheme. Wins over the media query above when present. */
 [data-theme="dark"] {
-  --bg:           #1c1c1e;
-  --surface:      #2c2c2e;
-  --border:       #3a3a3c;
-  --text:         #f2f2f7;
-  --text-muted:   #aeaeb2;
-  --primary:      #3b82f6;
-  --primary-hover:#60a5fa;
-  --danger:       #f87171;
-  --danger-hover: #fca5a5;
-  --shadow:       0 1px 3px rgba(0,0,0,.4);
+  --bg:             #1c1917;
+  --surface:        #292524;
+  --border:         #44403c;
+  --text:           #fafaf9;
+  --text-muted:     #a8a29e;
+  --primary:        #2dd4bf;
+  --primary-hover:  #5eead4;
+  --danger:         #f87171;
+  --danger-hover:   #fca5a5;
+  --gradient-primary: linear-gradient(135deg, #2dd4bf 0%, #0d9488 100%);
+  --surface-header: rgba(41, 37, 36, .85);
+  --shadow:         0 1px 4px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:      0 4px 16px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25);
+  --shadow-lg:      0 8px 32px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.3);
+  --surface-danger: #450a0a;
+  --border-danger:  #991b1b;
+  --surface-info:   #134e4a;
+  --border-info:    #0f766e;
 }
 
 [data-theme="light"] {
-  --bg:           #f5f5f7;
-  --surface:      #ffffff;
-  --border:       #e2e2e7;
-  --text:         #1c1c1e;
-  --text-muted:   #6e6e73;
-  --primary:      #2563eb;
-  --primary-hover:#1d4ed8;
-  --danger:       #dc2626;
-  --danger-hover: #b91c1c;
-  --shadow:       0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+  --bg:             #faf9f7;
+  --surface:        #ffffff;
+  --border:         #e7e4de;
+  --text:           #1c1917;
+  --text-muted:     #78716c;
+  --primary:        #0d9488;
+  --primary-hover:  #0f766e;
+  --danger:         #dc2626;
+  --danger-hover:   #b91c1c;
+  --gradient-primary: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  --surface-header: rgba(255, 255, 255, .85);
+  --shadow:         0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:      0 4px 16px rgba(0,0,0,.09), 0 2px 6px rgba(0,0,0,.06);
+  --shadow-lg:      0 8px 32px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.08);
+  --surface-danger: #fef2f2;
+  --border-danger:  #fecaca;
+  --surface-info:   #f0fdfa;
+  --border-info:    #99f6e4;
 }
 
 body {

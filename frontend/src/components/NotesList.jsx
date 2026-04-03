@@ -213,16 +213,16 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
         <SharePanel noteId={sharingNoteId} onClose={() => setSharingNoteId(null)} />
       ) : null}
       <header className="notes-header">
-        <span className="notes-logo">Notes</span>
+        <h1 className="notes-logo">Notes</h1>
         <div className="notes-header-right">
           <button
             type="button"
-            className="btn-avatar-profile"
+            className={`btn-avatar-profile${view === 'profile' ? ' btn-avatar-profile--active' : ''}`}
             onClick={() => { setSaveError(null); setEditingNote(null); setView('profile') }}
-            title="Edit profile"
             aria-label="Edit profile"
+            aria-pressed={view === 'profile'}
           >
-            <AvatarBubble avatarUrl={avatarUrl} displayName={fullName ?? userEmail} size={20} />
+            <AvatarBubble avatarUrl={avatarUrl} displayName={fullName ?? userEmail} size={24} />
             <span className="notes-user-email">
               {fullName !== null ? fullName : userEmail}
             </span>
@@ -266,10 +266,12 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
           />
         ) : showShared ? (
           // Shared with me — notes owned by others, shared to this user
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div className="notes-tab-bar">
+          <div className="notes-view">
+            <div className="notes-tab-bar" role="tablist" aria-label="Notes views">
               <button
                 type="button"
+                role="tab"
+                aria-selected={false}
                 className="notes-tab"
                 onClick={() => { setSaveError(null); startTransition(() => { setView('list'); fetchNotes('active') }) }}
               >
@@ -277,6 +279,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={false}
                 className="notes-tab"
                 onClick={() => { setSaveError(null); startTransition(() => { clearSearch(); setView('archive'); fetchNotes('archive') }) }}
               >
@@ -284,6 +288,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={true}
                 className="notes-tab notes-tab--active"
               >
                 Shared with me
@@ -331,10 +337,12 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
           // Dim stale content while the tab-switch transition loads new notes.
           // isPending is true only during startTransition — no flash, no empty state.
           // (rendering-usetransition-loading)
-          <div style={{ opacity: isPending ? 0.5 : 1, transition: 'opacity 0.15s', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div className="notes-tab-bar">
+          <div className="notes-view" style={{ opacity: isPending ? 0.5 : 1, transition: 'opacity 0.15s' }}>
+            <div className="notes-tab-bar" role="tablist" aria-label="Notes views">
               <button
                 type="button"
+                role="tab"
+                aria-selected={tab === 'active'}
                 className={`notes-tab${tab === 'active' ? ' notes-tab--active' : ''}`}
                 onClick={() => {
                   setSaveError(null)
@@ -348,6 +356,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={tab === 'archive'}
                 className={`notes-tab${tab === 'archive' ? ' notes-tab--active' : ''}`}
                 onClick={() => {
                   setSaveError(null)
@@ -362,6 +372,8 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={false}
                 className="notes-tab"
                 onClick={() => {
                   setSaveError(null)
@@ -412,7 +424,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                     ? `${notes.length} archived`
                     : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
               </h2>
-              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+              <div className="notes-list-actions">
                 {activeTagId !== null ? (
                   <button
                     type="button"
@@ -425,6 +437,7 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
                 {tab === 'active' ? (
                   <button
                     type="button"
+                    className="btn-primary"
                     onClick={() => { setSaveError(null); setView('compose') }}
                   >
                     + New note

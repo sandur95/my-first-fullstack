@@ -88,9 +88,7 @@ export default function ProfileEditor({
 
       {/* Avatar upload area */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '.5rem' }}>
-        <span className="note-editor" style={{ fontSize: '.8125rem', fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: 'none', boxShadow: 'none', padding: 0, gap: 0 }}>
-          Profile picture
-        </span>
+        <label>Profile picture</label>
 
         {/* Wrapper provides the relative context for the overlay */}
         <div
@@ -165,7 +163,7 @@ export default function ProfileEditor({
       />
 
       <div className="note-editor-actions">
-        <button type="submit" disabled={saving || isUploading}>
+        <button type="submit" className="btn-primary" disabled={saving || isUploading}>
           {submitLabel}
         </button>
         <button type="button" className="btn-secondary" onClick={onCancel}>

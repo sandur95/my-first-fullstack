@@ -171,7 +171,7 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
               placeholder="Add tag… (Enter to create)"
               autoComplete="off"
             />
-            {showDropdown && (filteredTags.length > 0 || tagInput.trim()) ? (
+            {showDropdown && (filteredTags.length > 0 || tagInput.trim() || allTags.length === 0) ? (
               <div className="tag-dropdown">
                 {filteredTags.map(tag => (
                   <button
@@ -193,6 +193,11 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
                     Create &ldquo;{tagInput.trim()}&rdquo;
                   </button>
                 ) : null}
+                {filteredTags.length === 0 && !tagInput.trim() ? (
+                  <span className="tag-dropdown-hint">
+                    {allTags.length === 0 ? 'Type to create your first tag' : 'All tags added — type to create more'}
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -207,6 +212,7 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
           (rerender-move-effect-to-event) */}
       {sharePermission === null ? (
       <div className="note-editor-attachments">
+        <label>Attachments</label>
         <div className="note-editor-attach-row">
           <button
             type="button"
@@ -288,7 +294,7 @@ export default function NoteEditor({ editingNote, onSave, onCancel, saving, allT
       ) : null}
 
       <div className="note-editor-actions">
-        <button type="submit" disabled={saving}>
+        <button type="submit" className="btn-primary" disabled={saving}>
           {submitLabel}
         </button>
         <button type="button" className="btn-secondary" onClick={onCancel}>

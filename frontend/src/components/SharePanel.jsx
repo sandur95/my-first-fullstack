@@ -26,6 +26,30 @@ export default function SharePanel({ noteId, onClose }) {
   const [formError, setFormError] = useState(null)
   const [toastMessage, setToastMessage] = useState(null)
   const toastRef = useRef(null)
+  const panelRef = useRef(null)
+
+  // Focus trap — keeps Tab/Shift+Tab cycling within the panel and closes on Escape.
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const focusable = panel.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    panel.addEventListener('keydown', handleKeyDown)
+    return () => panel.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   const showToast = useCallback((msg) => {
     clearTimeout(toastRef.current)
@@ -74,13 +98,16 @@ export default function SharePanel({ noteId, onClose }) {
     <div
       className="share-panel-backdrop"
       onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Share note"
     >
-      <div className="share-panel">
+      <div
+        className="share-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-panel-title"
+      >
         <div className="share-panel-header">
-          <h2 className="share-panel-title">Share note</h2>
+          <h2 id="share-panel-title" className="share-panel-title">Share note</h2>
           <button
             type="button"
             className="share-panel-close"

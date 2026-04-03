@@ -8,28 +8,36 @@
    --------------------------------------------------------------------------- */
 button {
   cursor: pointer;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   font-size: .875rem;
   font-weight: 500;
   padding: .5rem 1rem;
   /* Include color + border-color so theme switches animate on buttons too */
-  transition: background .15s, box-shadow .15s, color .15s, border-color .15s;
+  transition: background .15s, box-shadow .15s, color .15s, border-color .15s, transform .15s, filter .15s;
   line-height: 1.4;
 }
 
-button[type="submit"],
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile):not(.note-card-menu-item):not(.note-card-menu-trigger) {
-  background: var(--primary);
+.btn-primary {
+  background: var(--gradient-primary);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(13,148,136,.3);
+  border: none;
 }
-button[type="submit"]:hover,
-button:not(.btn-secondary):not(.btn-danger):not(.auth-toggle):not(.btn-theme):not(.notes-search-clear):not(.btn-avatar-profile):not(.note-card-menu-item):not(.note-card-menu-trigger):hover {
-  background: var(--primary-hover);
+.btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(13,148,136,.4);
 }
 button:disabled {
   opacity: .55;
   cursor: not-allowed;
+}
+
+/* Global keyboard focus ring — covers all interactive elements.
+   Individual components that define custom focus styles can override this. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .btn-secondary {
@@ -38,7 +46,8 @@ button:disabled {
   border-color: var(--border);
 }
 .btn-secondary:hover {
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-md);
+  border-color: var(--text-muted);
 }
 
 .btn-danger {
@@ -55,13 +64,15 @@ button:disabled {
   background: none;
   border-color: var(--border);
   color: var(--text-muted);
-  padding: .375rem .5rem;
-  font-size: 1rem;
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--text-base);
   line-height: 1;
+  border-radius: var(--radius-sm);
 }
 .btn-theme:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--primary);
+  background: var(--surface-info);
 }
 
 .btn-theme-corner {
@@ -100,40 +111,44 @@ button:disabled {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+  background-image: radial-gradient(ellipse at 65% 35%, rgba(13,148,136,.08) 0%, transparent 65%),
+                    radial-gradient(ellipse at 30% 80%, rgba(13,148,136,.05) 0%, transparent 60%);
 }
 
 .auth-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 2rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 2.5rem;
   width: 100%;
   max-width: 400px;
 }
 
 .auth-card h1 {
-  font-size: 1.5rem;
-  margin-bottom: 1.25rem;
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-5);
+  color: var(--primary);
+  letter-spacing: -.5px;
 }
 
 .auth-card form {
   display: flex;
   flex-direction: column;
-  gap: .75rem;
+  gap: var(--space-3);
 }
 
 .auth-card label {
-  font-size: .875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
-  margin-bottom: -.25rem;
+  margin-bottom: calc(var(--space-1) * -1);
 }
 
 .auth-card input {
   padding: .5rem .75rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
   font-size: 1rem;
@@ -154,42 +169,33 @@ button:disabled {
   background: none !important;
   border: none !important;
   color: var(--primary);
-  font-size: .875rem;
-  margin-top: 1rem;
+  font-size: var(--text-sm);
+  margin-top: var(--space-4);
   width: 100%;
   text-align: center;
-  padding: .25rem;
+  padding: var(--space-1);
 }
 .auth-toggle:hover {
   text-decoration: underline;
 }
 
 .form-error {
-  background: #fef2f2;
+  background: var(--surface-danger);
   color: var(--danger);
-  border: 1px solid #fecaca;
+  border: 1px solid var(--border-danger);
   border-radius: var(--radius);
-  padding: .5rem .75rem;
-  font-size: .875rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .form-message {
-  background: #eff6ff;
+  background: var(--surface-info);
   color: var(--primary);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--border-info);
   border-radius: var(--radius);
-  padding: .5rem .75rem;
-  font-size: .875rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
 }
-
-@media (prefers-color-scheme: dark) {
-  .form-error  { background: #450a0a; border-color: #991b1b; }
-  .form-message { background: #1e3a5f; border-color: #1d4ed8; }
-}
-[data-theme="dark"] .form-error   { background: #450a0a; border-color: #991b1b; }
-[data-theme="dark"] .form-message { background: #1e3a5f; border-color: #1d4ed8; }
-[data-theme="light"] .form-error   { background: #fef2f2; border-color: #fecaca; }
-[data-theme="light"] .form-message { background: #eff6ff; border-color: #bfdbfe; }
 
 /* ---------------------------------------------------------------------------
    Notes layout
@@ -204,26 +210,30 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--surface);
+  background: var(--surface-header);
+  backdrop-filter: blur(12px) saturate(1.6);
+  -webkit-backdrop-filter: blur(12px) saturate(1.6);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: .75rem 1.5rem;
+  padding: var(--space-3) var(--space-6);
 }
 
 .notes-logo {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--primary);
   letter-spacing: -.5px;
+  /* Reset heading margin when used as h1 */
+  margin: 0;
 }
 
 .notes-header-right {
   display: flex;
   align-items: center;
-  gap: .75rem;
+  gap: var(--space-3);
 }
 
 /* Align the three interactive controls in the header to the same height.
@@ -236,7 +246,14 @@ button:disabled {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  /* btn-secondary and btn-theme centre their single icon/label;
+     btn-avatar-profile left-aligns avatar + name */
   justify-content: center;
+}
+
+/* Profile button left-aligns its avatar + name content */
+.notes-header-right .btn-avatar-profile {
+  justify-content: flex-start;
 }
 
 /* Theme toggle is a square icon button in the header */
@@ -247,22 +264,27 @@ button:disabled {
 }
 
 .notes-user-email {
-  font-size: .8125rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Hide the display-name label on small screens — the avatar bubble provides
+   sufficient identity context at that size. */
+@media (max-width: 480px) {
+  .notes-user-email { display: none; }
+}
 
 .notes-main {
-  max-width: 900px;
+  max-width: clamp(900px, 85vw, 1400px);
   width: 100%;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  padding: var(--space-6) var(--space-4) var(--space-8);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: var(--space-5);
 }
 
 .notes-list-header {
@@ -272,7 +294,7 @@ button:disabled {
 }
 
 .notes-list-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-muted);
   margin: 0;
@@ -283,27 +305,30 @@ button:disabled {
    --------------------------------------------------------------------------- */
 .notes-tab-bar {
   display: flex;
-  gap: .375rem;
+  gap: var(--space-1);
 }
 
 .notes-tab {
   background: var(--surface);
   color: var(--text-muted);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: .8125rem;
+  border-radius: 999px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  padding: .3125rem .875rem;
-  transition: background .15s, color .15s, border-color .15s;
+  padding: var(--space-1) var(--space-4);
+  min-height: 2.25rem;
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
 }
 .notes-tab:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--primary);
+  background: var(--surface-info);
 }
 .notes-tab--active {
-  background: var(--primary);
+  background: var(--gradient-primary);
   color: #fff;
-  border-color: var(--primary);
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(13,148,136,.3);
 }
 
 /* ---------------------------------------------------------------------------
@@ -312,23 +337,24 @@ button:disabled {
 .note-card-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: .25rem;
-  margin-top: .375rem;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
 }
 
 .tag-pill {
-  background: var(--primary);
+  background: var(--gradient-primary);
   color: #fff;
   border: none;
   border-radius: 999px;
-  font-size: .6875rem;
-  padding: .125rem .5rem;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
-  opacity: .85;
-  transition: opacity .15s;
+  opacity: .9;
+  transition: opacity .15s, filter .15s;
 }
 .tag-pill:hover {
   opacity: 1;
+  filter: brightness(1.08);
 }
 
 /* Selected-tag pill inside the editor — muted style with × to remove */
@@ -357,7 +383,7 @@ button:disabled {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-md);
   max-height: 10rem;
   overflow-y: auto;
 }
@@ -365,16 +391,26 @@ button:disabled {
   display: block;
   width: 100%;
   text-align: left;
-  padding: .375rem .75rem;
+  padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
   border-radius: 0;
-  font-size: .875rem;
+  font-size: var(--text-sm);
   color: var(--text);
   cursor: pointer;
 }
 .tag-dropdown button:hover {
   background: var(--bg);
+}
+
+/* Non-interactive hint shown when no options are available */
+.tag-dropdown-hint {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-style: italic;
+  pointer-events: none;
 }
 
 /* Active tag filter chip shown in notes-list-header */
@@ -383,8 +419,8 @@ button:disabled {
   color: var(--primary);
   border: 1px solid var(--primary);
   border-radius: 999px;
-  font-size: .75rem;
-  padding: .1875rem .625rem;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
   cursor: pointer;
   transition: background .15s, color .15s;
 }
@@ -399,38 +435,41 @@ button:disabled {
 .note-editor {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: 1.25rem;
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: .75rem;
+  gap: var(--space-3);
 }
 
 .note-editor h2 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--text-muted);
   font-weight: 500;
 }
 
 .note-editor label {
-  font-size: .8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
-  margin-bottom: -.25rem;
+  margin-bottom: calc(var(--space-1) * -1);
 }
 
 .note-editor input,
 .note-editor textarea {
-  padding: .5rem .75rem;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
-  font-size: .9375rem;
+  font-size: var(--text-sm);
   font-family: inherit;
   width: 100%;
   resize: vertical;
+}
+.note-editor textarea {
+  min-height: 6rem; /* prevent collapsing below a readable floor */
 }
 .note-editor input:focus,
 .note-editor textarea:focus {
@@ -440,7 +479,7 @@ button:disabled {
 
 .note-editor-actions {
   display: flex;
-  gap: .5rem;
+  gap: var(--space-2);
 }
 
 /* ---------------------------------------------------------------------------
@@ -449,7 +488,7 @@ button:disabled {
 .notes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 /* ---------------------------------------------------------------------------
@@ -458,21 +497,23 @@ button:disabled {
 .note-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  padding: 1rem;
-  gap: .75rem;
-  transition: box-shadow .15s;
+  padding: var(--space-4);
+  gap: var(--space-3);
+  transition: box-shadow .2s, transform .2s, border-color .2s;
 }
 .note-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
-/* Pinned state — accent left border using the primary colour variable */
+/* Pinned state — gradient left border using the primary colour */
 .note-card--pinned {
   border-left: 3px solid var(--primary);
+  background: linear-gradient(to right, rgba(13,148,136,.04) 0%, var(--surface) 30%);
 }
 
 .note-card-body {
@@ -480,15 +521,16 @@ button:disabled {
 }
 
 .note-card-title {
-  font-size: 1rem;
-  margin-bottom: .25rem;
+  font-size: var(--text-base);
+  margin-bottom: var(--space-1);
 }
 
 .note-card-content {
-  font-size: .875rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 4;
+  line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -498,12 +540,12 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--border);
-  padding-top: .625rem;
+  padding-top: var(--space-3);
   margin-top: auto;
 }
 
 .note-card-date {
-  font-size: .75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -512,25 +554,54 @@ button:disabled {
   position: relative;
 }
 
+/* Ghost icon trigger — no border/background by default so it sits lightly
+   in the card footer. Border + background appear on hover and when open. */
 .note-card-menu-trigger {
-  font-size: .875rem;
-  padding: .25rem .625rem;
-  letter-spacing: .1em;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.note-card-menu-trigger:hover,
+.note-card-menu-trigger[aria-expanded="true"] {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(.25rem) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .note-card-menu-dropdown {
   position: absolute;
-  bottom: calc(100% + .375rem); /* opens upward — avoids viewport clipping in a card grid */
+  bottom: calc(100% + var(--space-1)); /* default: opens upward */
   right: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .15);
   display: flex;
   flex-direction: column;
   min-width: 10rem;
+  max-width: 14rem;
   z-index: 50;
   overflow: hidden;
+  animation: menu-in .12s ease;
+  transform-origin: bottom right;
+  padding: var(--space-1) 0;
+}
+
+/* When card is near the top, open dropdown downward instead */
+.note-card-menu-dropdown--below {
+  bottom: auto;
+  top: calc(100% + var(--space-1));
+  transform-origin: top right;
 }
 
 .note-card-menu-item {
@@ -538,24 +609,57 @@ button:disabled {
   border: none;
   border-radius: 0;
   color: var(--text);
-  font-size: .875rem;
+  font-size: var(--text-sm);
   font-weight: 400;
-  padding: .5rem .875rem;
+  padding: var(--space-2) var(--space-3);
   text-align: left;
   width: 100%;
   transition: background .1s;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 .note-card-menu-item:hover {
   background: var(--bg);
 }
+/* Active state — item is currently applied (e.g. note is pinned).
+   A trailing check mark confirms the state without relying on colour alone. */
 .note-card-menu-item--active {
   color: var(--primary);
+  font-weight: 500;
 }
+.note-card-menu-item--active::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: var(--text-xs);
+  opacity: .75;
+}
+/* Separator + danger colour for destructive actions */
 .note-card-menu-item--danger {
   color: var(--danger);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-1);
 }
 .note-card-menu-item--danger:hover {
   background: rgba(220, 38, 38, .08);
+}
+
+/* Inline delete-confirmation block shown inside the dropdown */
+.note-card-menu-confirm {
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+.note-card-menu-confirm-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.note-card-menu-confirm-actions {
+  display: flex;
+  gap: var(--space-1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -566,20 +670,20 @@ button:disabled {
 .note-attachments {
   display: flex;
   flex-direction: column;
-  gap: .375rem;
-  margin-top: .375rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .attachment-item {
   display: flex;
   align-items: center;
-  gap: .375rem;
-  font-size: .75rem;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: .25rem .375rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   overflow: hidden;
 }
 
@@ -619,7 +723,7 @@ button:disabled {
 .attachment-link {
   display: flex;
   align-items: center;
-  gap: .375rem;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
   color: inherit;
@@ -636,7 +740,14 @@ button:disabled {
   width: 48px;
   height: 48px;
   border-radius: calc(var(--radius) - 2px);
-  background: var(--border);
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    var(--surface) 50%,
+    var(--border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
   flex-shrink: 0;
 }
 
@@ -645,9 +756,9 @@ button:disabled {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: .875rem;
+  font-size: var(--text-sm);
   line-height: 1;
-  padding: .125rem .25rem;
+  padding: var(--space-1) var(--space-1);
   flex-shrink: 0;
   border-radius: calc(var(--radius) - 2px);
   transition: color .15s, background .15s;
@@ -664,40 +775,40 @@ button:disabled {
 .note-editor-attachments {
   display: flex;
   flex-direction: column;
-  gap: .375rem;
+  gap: var(--space-2);
 }
 
 .note-editor-attach-row {
   display: flex;
   align-items: center;
-  gap: .625rem;
+  gap: var(--space-3);
 }
 
 .note-editor-attach-hint {
-  font-size: .75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .note-editor-attachment-list {
   list-style: none;
   padding: 0;
-  margin: .125rem 0 0;
+  margin: var(--space-1) 0 0;
   display: flex;
   flex-direction: column;
-  gap: .25rem;
+  gap: var(--space-1);
 }
 
 .note-editor-attachment-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .375rem;
-  font-size: .8125rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: .25rem .5rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
 }
 
 /* Filename inside the editor list */
@@ -707,7 +818,7 @@ button:disabled {
   white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
-  font-size: .8125rem;
+  font-size: var(--text-sm);
 }
 
 /* ---------------------------------------------------------------------------
@@ -719,14 +830,14 @@ button:disabled {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: .9375rem;
+  font-size: var(--text-sm);
 }
 
 .empty-state {
   text-align: center;
   color: var(--text-muted);
-  padding: 3rem 1rem;
-  font-size: .9375rem;
+  padding: var(--space-8) var(--space-4);
+  font-size: var(--text-sm);
 }
 
 /* ---------------------------------------------------------------------------
@@ -740,18 +851,21 @@ button:disabled {
 
 .notes-search-input {
   width: 100%;
-  padding: .5rem .75rem;
-  padding-right: 2.25rem; /* room for the clear button */
+  padding: var(--space-2) var(--space-4);
+  padding-right: 2.5rem; /* room for the clear button */
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--text);
-  font-size: .9375rem;
+  font-size: var(--text-sm);
   font-family: inherit;
+  box-shadow: var(--shadow);
+  transition: box-shadow .15s, border-color .15s;
 }
 .notes-search-input:focus {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
+  box-shadow: var(--shadow-md);
 }
 /* Hide the browser-native clear button — we provide our own */
 .notes-search-input::-webkit-search-cancel-button {
@@ -760,7 +874,7 @@ button:disabled {
 
 .notes-search-clear {
   position: absolute;
-  right: .5rem;
+  right: var(--space-3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -770,7 +884,7 @@ button:disabled {
   background: var(--text-muted);
   border: none;
   color: var(--surface);
-  font-size: .5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 1;
   padding: 0;
@@ -787,27 +901,38 @@ button:disabled {
 .notes-load-more {
   display: flex;
   justify-content: center;
-  padding-top: .5rem;
+  padding-top: var(--space-2);
 }
 
 /* ---------------------------------------------------------------------------
    Toast error notification
    --------------------------------------------------------------------------- */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(.75rem); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .toast-error {
   position: fixed;
-  bottom: 1.5rem;
+  bottom: var(--space-6);
   left: 50%;
   transform: translateX(-50%);
   background: var(--danger);
   color: #fff;
   border-radius: var(--radius);
-  padding: .625rem 1.125rem;
-  font-size: .875rem;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
   font-weight: 500;
   box-shadow: 0 4px 16px rgba(0,0,0,.22);
   z-index: 100;
   pointer-events: none;
   white-space: nowrap;
+  animation: toast-in .2s ease;
 }
 
 /* ---------------------------------------------------------------------------
@@ -830,9 +955,9 @@ button:disabled {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--gradient-primary);
   color: #fff;
-  font-size: .625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: .02em;
   line-height: 1;
@@ -840,20 +965,26 @@ button:disabled {
 }
 
 /* Button that groups the avatar circle + user name in the header.
-   No background or border by default; on hover shows only a shadow,
-   matching the .btn-secondary hover effect. */
+   No background or border by default; on hover shows a subtle background
+   tint so the affordance is visible in both light and dark themes. */
 .btn-avatar-profile {
   background: none;
-  border: none;
-  padding: .5rem .75rem;
+  border: 1px solid transparent;
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: var(--space-2);
   border-radius: var(--radius);
+  transition: background .15s, border-color .15s;
 }
 .btn-avatar-profile:hover {
-  box-shadow: var(--shadow);
+  background: var(--border);
+}
+/* Active state — shown when the profile editor is open */
+.btn-avatar-profile--active {
+  background: var(--border);
+  border-color: var(--border);
 }
 
 /* ---------------------------------------------------------------------------
@@ -917,8 +1048,8 @@ button:disabled {
    Small button modifier — used in compact lists (e.g. share-row revoke)
    --------------------------------------------------------------------------- */
 .btn-small {
-  font-size: .75rem;
-  padding: .25rem .625rem;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
 }
 
 /* ---------------------------------------------------------------------------
@@ -937,8 +1068,8 @@ button:disabled {
 .share-panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, .24);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   padding: 1.5rem;
   width: min(480px, calc(100vw - 2rem));
   max-height: calc(100vh - 4rem);
@@ -955,7 +1086,7 @@ button:disabled {
 }
 
 .share-panel-title {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   margin: 0;
 }
@@ -963,9 +1094,9 @@ button:disabled {
 .share-panel-close {
   background: none;
   border: none;
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   line-height: 1;
-  padding: .25rem .5rem;
+  padding: var(--space-1) var(--space-2);
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -975,48 +1106,49 @@ button:disabled {
 
 .share-panel-form {
   display: flex;
-  gap: .5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .share-panel-email {
   flex: 1;
   min-width: 0;
-  padding: .5rem .75rem;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
-  font-size: .875rem;
+  font-size: var(--text-sm);
 }
 .share-panel-email:focus {
   outline: none;
   border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(13,148,136,.15);
 }
 
 .share-panel-permission-select {
-  padding: .5rem .625rem;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
-  font-size: .875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .share-panel-list {
   display: flex;
   flex-direction: column;
-  gap: .625rem;
+  gap: var(--space-3);
 }
 
 .share-row {
   display: flex;
   align-items: center;
-  gap: .625rem;
-  padding: .5rem .75rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--bg);
 }
 
@@ -1025,12 +1157,12 @@ button:disabled {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: .125rem;
+  gap: var(--space-1);
   overflow: hidden;
 }
 
 .share-row-name {
-  font-size: .875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -1038,7 +1170,7 @@ button:disabled {
 }
 
 .share-row-email {
-  font-size: .75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1046,8 +1178,8 @@ button:disabled {
 }
 
 .share-panel-permission-select--inline {
-  font-size: .75rem;
-  padding: .25rem .5rem;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1056,11 +1188,34 @@ button:disabled {
 .note-card-shared-by {
   display: flex;
   align-items: center;
-  gap: .375rem;
-  margin-bottom: .375rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .note-card-shared-by-label {
-  font-size: .75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
+}
+
+/* Shared card state — softer dashed left border */
+.note-card--shared {
+  border-left: 3px dashed var(--border);
+}
+
+/* ---------------------------------------------------------------------------
+   Layout utilities
+   --------------------------------------------------------------------------- */
+
+/* Vertical flex column with standard gap — replaces repeated inline styles */
+.notes-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Actions row in the notes-list-header (tag chip + New note button) */
+.notes-list-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
 }

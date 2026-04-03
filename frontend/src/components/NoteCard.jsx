@@ -53,7 +53,10 @@ export default memo(function NoteCard({ note, isArchived, isOwner = true, shareP
 
   // Three-dots actions dropdown. (rerender-functional-setstate)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuBelow, setMenuBelow] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(false)
   const menuRef = useRef(null)
+  const triggerRef = useRef(null)
 
   // Download all attachments whenever the list changes.
   // Each download() uses the user's active JWT; the storage SELECT policy is
@@ -123,6 +126,7 @@ export default memo(function NoteCard({ note, isArchived, isOwner = true, shareP
     function handleOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setMenuOpen(false)
+        setPendingDelete(false)
       }
     }
     document.addEventListener('mousedown', handleOutside)
@@ -130,7 +134,7 @@ export default memo(function NoteCard({ note, isArchived, isOwner = true, shareP
   }, [menuOpen])
 
   return (
-    <article className={`note-card${note.pinned && !isArchived ? ' note-card--pinned' : ''}`}>
+    <article className={`note-card${note.pinned && !isArchived ? ' note-card--pinned' : ''}${sharePermission !== null ? ' note-card--shared' : ''}`}>
       <div className="note-card-body">
         {sharePermission !== null ? (
           <div className="note-card-shared-by">
@@ -206,34 +210,63 @@ export default memo(function NoteCard({ note, isArchived, isOwner = true, shareP
           <div className="note-card-menu" ref={menuRef}>
             <button
               type="button"
-              className="btn-secondary note-card-menu-trigger"
+              className="note-card-menu-trigger"
               aria-label="Note actions"
               aria-expanded={menuOpen}
               aria-haspopup="menu"
-              onClick={() => setMenuOpen(o => !o)}
-            >
-              ···
+              ref={triggerRef}
+              onClick={() => {
+                if (!menuOpen) {
+                  const rect = triggerRef.current?.getBoundingClientRect()
+                  setMenuBelow(rect ? rect.top < 200 : false)
+                }
+                setMenuOpen(o => !o)
+                if (menuOpen) setPendingDelete(false)
+              }}>
+              ⋮
             </button>
             {menuOpen ? (
-              <div className="note-card-menu-dropdown" role="menu">
+              <div className={`note-card-menu-dropdown${menuBelow ? ' note-card-menu-dropdown--below' : ''}`} role="menu">
                 {isArchived ? (
                   <>
                     <button
                       type="button"
                       role="menuitem"
                       className="note-card-menu-item"
-                      onClick={() => { onUnarchive(note.id); setMenuOpen(false) }}
+                      onClick={() => { onUnarchive(note.id); setMenuOpen(false); setPendingDelete(false) }}
                     >
                       Unarchive
                     </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="note-card-menu-item note-card-menu-item--danger"
-                      onClick={() => { onDeletePermanent(note.id); setMenuOpen(false) }}
-                    >
-                      Delete permanently
-                    </button>
+                    {pendingDelete ? (
+                      <div className="note-card-menu-confirm">
+                        <span className="note-card-menu-confirm-label">Delete permanently?</span>
+                        <div className="note-card-menu-confirm-actions">
+                          <button
+                            type="button"
+                            className="btn-danger btn-small"
+                            onClick={() => { onDeletePermanent(note.id); setMenuOpen(false); setPendingDelete(false) }}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary btn-small"
+                            onClick={() => setPendingDelete(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="note-card-menu-item note-card-menu-item--danger"
+                        onClick={() => setPendingDelete(true)}
+                      >
+                        Delete permanently
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -254,7 +287,7 @@ export default memo(function NoteCard({ note, isArchived, isOwner = true, shareP
                         className={`note-card-menu-item${note.pinned ? ' note-card-menu-item--active' : ''}`}
                         onClick={() => { onPin(note.id, note.pinned); setMenuOpen(false) }}
                       >
-                        {note.pinned ? '📌 Unpin' : '📌 Pin'}
+                        {note.pinned ? 'Unpin' : 'Pin'}
                       </button>
                     ) : null}
                     {isOwner || sharePermission === 'edit' ? (
