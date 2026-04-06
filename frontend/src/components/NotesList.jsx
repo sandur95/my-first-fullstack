@@ -23,9 +23,9 @@ import SharePanel from './SharePanel'
  * All sub-components imported at module level — never inline.
  * (rerender-no-inline-components)
  *
- * @param {{ userId: string, userEmail: string, onSignOut: Function }} props
+ * @param {{ userId: string, userEmail: string, section: 'notes'|'documents', onSectionChange: Function, onSignOut: Function }} props
  */
-export default function NotesList({ userId, userEmail, onSignOut }) {
+export default function NotesList({ userId, userEmail, section, onSectionChange, onSignOut }) {
   // Derive tab during render — no extra useState needed (rerender-derived-state-no-effect)
   // view === 'archive' drives the archive tab; 'shared' drives the shared-with-me section;
   // all other views use the active tab.
@@ -213,7 +213,26 @@ export default function NotesList({ userId, userEmail, onSignOut }) {
         <SharePanel noteId={sharingNoteId} onClose={() => setSharingNoteId(null)} />
       ) : null}
       <header className="notes-header">
-        <h1 className="notes-logo">Notes</h1>
+        <div className="section-toggle" role="tablist" aria-label="Main sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={section === 'notes'}
+            className={`section-toggle-btn${section === 'notes' ? ' section-toggle-btn--active' : ''}`}
+            onClick={() => onSectionChange('notes')}
+          >
+            Notes
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={section === 'documents'}
+            className={`section-toggle-btn${section === 'documents' ? ' section-toggle-btn--active' : ''}`}
+            onClick={() => onSectionChange('documents')}
+          >
+            Documents
+          </button>
+        </div>
         <div className="notes-header-right">
           <button
             type="button"

@@ -79,3 +79,15 @@
  */
 
 // This module exports no runtime values — types are consumed via JSDoc only.
+
+/**
+ * A row in public.documents.
+ *
+ * @typedef {Object} Document
+ * @property {number} id         - bigint identity primary key
+ * @property {string} user_id    - UUID FK → public.users.id
+ * @property {string} title
+ * @property {string} body       - Raw Markdown content (default: '')
+ * @property {string} created_at - ISO 8601 with timezone (timestamptz)
+ * @property {string} updated_at - ISO 8601 with timezone (timestamptz)
+ */

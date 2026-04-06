@@ -221,15 +221,6 @@ button:disabled {
   padding: var(--space-3) var(--space-6);
 }
 
-.notes-logo {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--primary);
-  letter-spacing: -.5px;
-  /* Reset heading margin when used as h1 */
-  margin: 0;
-}
-
 .notes-header-right {
   display: flex;
   align-items: center;
@@ -1218,4 +1209,148 @@ button:disabled {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Section toggle — Notes / Documents pills inside the sticky header
+   --------------------------------------------------------------------------- */
+.section-toggle {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.section-toggle-btn {
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-4);
+  min-height: 2rem;
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+}
+.section-toggle-btn:hover {
+  color: var(--text);
+  border-color: var(--primary);
+  background: var(--surface-info);
+}
+.section-toggle-btn--active {
+  background: var(--gradient-primary);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(13,148,136,.3);
+}
+
+/* ---------------------------------------------------------------------------
+   Documents list
+   --------------------------------------------------------------------------- */
+.doc-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.doc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  gap: var(--space-3);
+  cursor: pointer;
+  transition: box-shadow .2s, transform .2s, border-color .2s;
+}
+.doc-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--primary);
+}
+
+.doc-card-body {
+  flex: 1;
+}
+
+.doc-card-title {
+  font-size: var(--text-base);
+  margin: 0 0 var(--space-1);
+}
+
+.doc-card-preview {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+
+.doc-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.doc-card-date {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Document placeholder editor
+   --------------------------------------------------------------------------- */
+.doc-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.doc-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.doc-editor-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+}
+.doc-editor-title:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.doc-editor-body {
+  flex: 1;
+  min-height: 24rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  resize: vertical;
+}
+.doc-editor-body:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
