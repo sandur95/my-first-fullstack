@@ -1,16 +1,14 @@
-import { useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { useAuth } from './hooks/useAuth'
 import AuthForm from './components/AuthForm'
 import NotesList from './components/NotesList'
 import DocumentsList from './components/DocumentsList'
+import DocumentEditor from './components/DocumentEditor'
 import { supabase } from './lib/supabase'
 import './App.css'
 
 function App() {
   const { session, loading } = useAuth()
-
-  // 'notes' | 'documents' — which top-level section is active
-  const [section, setSection] = useState('notes')
 
   // Derived during render — no extra useState needed
   // (rerender-derived-state-no-effect)
@@ -27,23 +25,15 @@ function App() {
 
   // Explicit ternary — prevents falsy 0/NaN rendering (rendering-conditional-render)
   return session !== null ? (
-    section === 'notes' ? (
-      <NotesList
-        userId={userId}
-        userEmail={userEmail}
-        section={section}
-        onSectionChange={setSection}
-        onSignOut={handleSignOut}
-      />
-    ) : (
-      <DocumentsList
-        userId={userId}
-        userEmail={userEmail}
-        section={section}
-        onSectionChange={setSection}
-        onSignOut={handleSignOut}
-      />
-    )
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/notes" replace />} />
+        <Route path="/notes" element={<NotesList userId={userId} userEmail={userEmail} onSignOut={handleSignOut} />} />
+        <Route path="/documents" element={<DocumentsList userId={userId} userEmail={userEmail} onSignOut={handleSignOut} />} />
+        <Route path="/documents/:documentId" element={<DocumentEditor userId={userId} userEmail={userEmail} onSignOut={handleSignOut} />} />
+        <Route path="*" element={<Navigate to="/notes" replace />} />
+      </Routes>
+    </BrowserRouter>
   ) : (
     <AuthForm />
   )

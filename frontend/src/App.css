@@ -1229,6 +1229,11 @@ button:disabled {
   padding: var(--space-1) var(--space-4);
   min-height: 2rem;
   transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+  /* NavLink renders <a> — reset anchor defaults */
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
 }
 .section-toggle-btn:hover {
   color: var(--text);
