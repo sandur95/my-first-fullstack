@@ -204,7 +204,7 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   // --- Error / not found ---
   if (docError !== null || doc === null) {
     return (
-      <div className="notes-layout">
+      <div className="notes-layout notes-layout--fullscreen doc-editor-enter">
         <header className="notes-header">
           <nav className="section-toggle" aria-label="Main sections">
             <NavLink to="/notes" className={navLinkClass}>Notes</NavLink>
@@ -232,7 +232,7 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
 
   // --- Editor view ---
   return (
-    <div className="notes-layout">
+    <div className="notes-layout notes-layout--fullscreen doc-editor-enter">
       <header className="notes-header">
         <nav className="section-toggle" aria-label="Main sections">
           <NavLink to="/notes" className={navLinkClass}>Notes</NavLink>

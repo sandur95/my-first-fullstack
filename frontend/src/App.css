@@ -1313,16 +1313,45 @@ button:disabled {
 }
 
 /* ---------------------------------------------------------------------------
+   Fullscreen layout — document editor fills the viewport below the header.
+   Applied via .notes-layout--fullscreen on the root wrapper.
+   Height is dynamic: 100vh minus whatever the sticky header occupies.
+   --------------------------------------------------------------------------- */
+.notes-layout--fullscreen {
+  height: 100vh;
+}
+
+.notes-layout--fullscreen > .notes-main {
+  max-width: none;
+  flex: 1;
+  overflow: hidden;
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Fade-in transition when the editor route mounts (< 200 ms) */
+@keyframes doc-editor-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.doc-editor-enter {
+  animation: doc-editor-fade-in .15s ease-out;
+}
+
+/* ---------------------------------------------------------------------------
    Split-pane Markdown editor
    --------------------------------------------------------------------------- */
 .doc-editor-main {
-  max-width: clamp(1000px, 92vw, 1600px);
+  max-width: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .doc-editor {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  height: 100%;
 }
 
 .doc-editor-toolbar {
@@ -1354,7 +1383,7 @@ button:disabled {
   grid-template-columns: var(--split-left, 50%) 6px 1fr;
   gap: 0;
   flex: 1;
-  min-height: 28rem;
+  min-height: 0;
 }
 
 .doc-editor-body {
@@ -1398,10 +1427,13 @@ button:disabled {
   height: 100%;
 }
 
+/* Narrow viewports: stack panes vertically (editor on top, preview below) */
 @media (max-width: 768px) {
   .doc-editor-split {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr 6px 1fr;
+    /* Override any user-set --split-left from horizontal drag */
+    --split-left: unset;
   }
   .doc-editor-divider {
     cursor: row-resize;
