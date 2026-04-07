@@ -5,6 +5,7 @@ import { useProfile } from '../hooks/useProfile'
 import { useAutoSave } from '../hooks/useAutoSave'
 import ThemeToggle from './ThemeToggle'
 import AvatarBubble from './AvatarBubble'
+import DocumentSharePanel from './DocumentSharePanel'
 
 /** bundle-conditional — loaded only when the editor opens */
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
@@ -31,6 +32,11 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   const [docError, setDocError] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editBody, setEditBody] = useState('')
+
+  // --- Sharing state ---
+  const [shareOpen, setShareOpen] = useState(false)
+  // null while loading, 'view' | 'edit' for sharees, undefined for owner
+  const [sharePermission, setSharePermission] = useState(null)
 
   // rerender-use-deferred-value — preview renders a frame behind typing
   const deferredBody = useDeferredValue(editBody)
@@ -67,10 +73,23 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
       setDoc(data)
       setEditTitle(data.title)
       setEditBody(data.body ?? '')
+      // Determine share permission for non-owners
+      if (data.user_id !== userId) {
+        const { data: shareRow } = await supabase
+          .from('document_shares')
+          .select('permission')
+          .eq('document_id', documentId)
+          .eq('shared_with_user_id', userId)
+          .maybeSingle()
+        if (cancelled) return
+        setSharePermission(shareRow?.permission ?? 'view')
+      } else {
+        setSharePermission(undefined)
+      }
       setDocLoading(false)
     })()
     return () => { cancelled = true }
-  }, [documentId])
+  }, [documentId, userId])
 
   // --- Realtime subscription for this single document ---
   useEffect(() => {
@@ -186,6 +205,10 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
     splitContainerRef.current.style.setProperty('--split-left', `${clamped}%`)
   }
 
+  // --- Derived sharing state ---
+  const isOwner = doc !== null && doc.user_id === userId
+  const canEdit = isOwner || sharePermission === 'edit'
+
   // --- Auto-save status label (rendering-conditional-render) ---
   const saveStatusLabel =
     autoSaveStatus === 'saving' ? 'Saving…' :
@@ -248,21 +271,23 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
       </header>
 
       {/* onKeyDown on the editor container so Ctrl+S works from any child */}
-      <main className="notes-main doc-editor-main" onKeyDown={handleEditorKeyDown}>
+      <main className="notes-main doc-editor-main" onKeyDown={canEdit ? handleEditorKeyDown : undefined}>
         <div className="doc-editor">
           <div className="doc-editor-toolbar">
             <button type="button" className="btn-secondary" onClick={handleClose}>
               ← Back
             </button>
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={autoSaveStatus === 'saving'}
-              onClick={flushAutoSave}
-            >
-              Save
-            </button>
-            {saveStatusLabel !== null ? (
+            {canEdit ? (
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={autoSaveStatus === 'saving'}
+                onClick={flushAutoSave}
+              >
+                Save
+              </button>
+            ) : null}
+            {canEdit && saveStatusLabel !== null ? (
               <span
                 className={`doc-autosave-status doc-autosave-status--${autoSaveStatus}`}
                 role="status"
@@ -270,40 +295,75 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
                 {saveStatusLabel}
               </span>
             ) : null}
+            {isOwner ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShareOpen(true)}
+              >
+                Share
+              </button>
+            ) : null}
+            {!isOwner ? (
+              <span className="share-badge">
+                {sharePermission === 'edit' ? 'Shared (edit)' : 'Shared (view)'}
+              </span>
+            ) : null}
           </div>
 
-          <input
-            type="text"
-            className="doc-editor-title"
-            value={editTitle}
-            onChange={handleTitleChange}
-            placeholder="Document title"
-            aria-label="Document title"
-          />
+          {canEdit ? (
+            <input
+              type="text"
+              className="doc-editor-title"
+              value={editTitle}
+              onChange={handleTitleChange}
+              placeholder="Document title"
+              aria-label="Document title"
+            />
+          ) : (
+            <h1 className="doc-editor-title doc-editor-title--readonly">{editTitle}</h1>
+          )}
 
-          <div className="doc-editor-split" ref={splitContainerRef}>
-            <textarea
-              ref={textareaRef}
-              className="doc-editor-body"
-              value={editBody}
-              onChange={handleBodyChange}
-              placeholder="Start writing Markdown…"
-              aria-label="Document body"
-            />
-            <div
-              className="doc-editor-divider"
-              onPointerDown={handleDividerPointerDown}
-              onPointerMove={handleDividerPointerMove}
-              aria-hidden="true"
-            />
-            <div className="doc-editor-preview" aria-label="Markdown preview" role="region">
-              <Suspense fallback={<p className="centered-status">Loading preview…</p>}>
-                <MarkdownPreview markdown={deferredBody} />
-              </Suspense>
+          {canEdit ? (
+            <div className="doc-editor-split" ref={splitContainerRef}>
+              <textarea
+                ref={textareaRef}
+                className="doc-editor-body"
+                value={editBody}
+                onChange={handleBodyChange}
+                placeholder="Start writing Markdown…"
+                aria-label="Document body"
+              />
+              <div
+                className="doc-editor-divider"
+                onPointerDown={handleDividerPointerDown}
+                onPointerMove={handleDividerPointerMove}
+                aria-hidden="true"
+              />
+              <div className="doc-editor-preview" aria-label="Markdown preview" role="region">
+                <Suspense fallback={<p className="centered-status">Loading preview…</p>}>
+                  <MarkdownPreview markdown={deferredBody} />
+                </Suspense>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="doc-editor-split doc-editor-split--readonly">
+              <div className="doc-editor-preview" aria-label="Markdown preview" role="region">
+                <Suspense fallback={<p className="centered-status">Loading preview…</p>}>
+                  <MarkdownPreview markdown={deferredBody} />
+                </Suspense>
+              </div>
+            </div>
+          )}
         </div>
       </main>
+
+      {shareOpen ? (
+        <DocumentSharePanel
+          documentId={Number(documentId)}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }

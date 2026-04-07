@@ -625,11 +625,9 @@ button:disabled {
   font-size: var(--text-xs);
   opacity: .75;
 }
-/* Separator + danger colour for destructive actions */
+/* Danger colour for destructive actions */
 .note-card-menu-item--danger {
   color: var(--danger);
-  border-top: 1px solid var(--border);
-  margin-top: var(--space-1);
 }
 .note-card-menu-item--danger:hover {
   background: rgba(220, 38, 38, .08);
@@ -641,7 +639,6 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  border-top: 1px solid var(--border);
 }
 .note-card-menu-confirm-label {
   font-size: var(--text-xs);
@@ -1456,6 +1453,54 @@ button:disabled {
 }
 .doc-autosave-status--error {
   color: var(--danger);
+}
+
+/* ---------------------------------------------------------------------------
+   Document sharing — read-only split pane + badges
+   --------------------------------------------------------------------------- */
+.doc-editor-split--readonly {
+  display: grid;
+  grid-template-columns: 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.doc-editor-title--readonly {
+  border: none;
+  background: none;
+  padding-left: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: var(--space-3);
+}
+
+/* Shared-permission pill badge — used on both note and document cards */
+.share-badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: .2rem .625rem;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--surface-info, var(--surface));
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  white-space: nowrap;
+}
+
+.doc-card--shared {
+  border-left: 3px dashed var(--border);
+}
+
+.doc-card-shared-by {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.doc-card-shared-by-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 /* ---------------------------------------------------------------------------
