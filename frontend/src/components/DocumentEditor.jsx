@@ -1,8 +1,12 @@
 import { useState, useCallback, useDeferredValue, useRef, useEffect, lazy, Suspense } from 'react'
 import { useParams, useNavigate, NavLink } from 'react-router'
+import * as Y from 'yjs'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../hooks/useProfile'
 import { useAutoSave } from '../hooks/useAutoSave'
+import { useYjsTextarea } from '../hooks/useYjsTextarea'
+import { SupabaseBroadcastProvider } from '../lib/SupabaseBroadcastProvider'
+import { uint8ArrayToHex, hexToUint8Array } from '../lib/yjs-encoding'
 import ThemeToggle from './ThemeToggle'
 import AvatarBubble from './AvatarBubble'
 import DocumentSharePanel from './DocumentSharePanel'
@@ -16,8 +20,9 @@ const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
  * Fetches the document by ID from the URL param (not via route state) so that
  * shareable URLs work when navigated to directly.
  *
- * Subscribes to Realtime changes for the single document so external updates
- * (e.g. another browser tab) are reflected.
+ * Uses Yjs (CRDT) for real-time collaborative editing with a custom
+ * Supabase Broadcast provider. Persists both the Yjs binary state and
+ * the plain-text body on auto-save.
  *
  * @param {{ userId: string, userEmail: string, onSignOut: Function }} props
  */
@@ -31,37 +36,44 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   const [docLoading, setDocLoading] = useState(true)
   const [docError, setDocError] = useState(null)
   const [editTitle, setEditTitle] = useState('')
-  const [editBody, setEditBody] = useState('')
 
   // --- Sharing state ---
   const [shareOpen, setShareOpen] = useState(false)
   // null while loading, 'view' | 'edit' for sharees, undefined for owner
   const [sharePermission, setSharePermission] = useState(null)
 
-  // rerender-use-deferred-value — preview renders a frame behind typing
-  const deferredBody = useDeferredValue(editBody)
+  // --- Yjs state ---
+  // ydoc is stored in state so that useYjsTextarea re-runs when it's created.
+  // ydocRef provides stable access inside callbacks (auto-save, wrapSelection).
+  const [ydoc, setYdoc] = useState(null)
+  const ydocRef = useRef(null)
+  const providerRef = useRef(null)
 
-  // --- Refs (rerender-use-ref-transient-values) ---
+  // --- Refs ---
   const textareaRef = useRef(null)
   const splitContainerRef = useRef(null)
   const docIdRef = useRef(null)
   const titleRef = useRef('')
-  const bodyRef = useRef('')
+
+  // Bind Yjs Y.Text to the textarea — returns { text, handleChange }
+  const { text: editBody, handleChange: onYjsBodyChange } = useYjsTextarea(ydoc, textareaRef)
+
+  // rerender-use-deferred-value — preview renders a frame behind typing
+  const deferredBody = useDeferredValue(editBody)
 
   // Keep refs in sync — written in an effect so the react-hooks/refs rule is satisfied.
   useEffect(() => {
     docIdRef.current = documentId
     titleRef.current = editTitle
-    bodyRef.current = editBody
   })
 
-  // --- Fetch document by ID on mount ---
+  // --- Fetch document + initialise Yjs doc & Broadcast provider ---
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       const { data, error: err } = await supabase
         .from('documents')
-        .select('id, user_id, title, body, created_at, updated_at')
+        .select('id, user_id, title, body, yjs_state, created_at, updated_at')
         .eq('id', documentId)
         .single()
       if (cancelled) return
@@ -72,7 +84,32 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
       }
       setDoc(data)
       setEditTitle(data.title)
-      setEditBody(data.body ?? '')
+
+      // Initialise Y.Doc
+      const newYdoc = new Y.Doc()
+      if (data.yjs_state) {
+        try {
+          Y.applyUpdate(newYdoc, hexToUint8Array(data.yjs_state))
+        } catch {
+          // Corrupted/stale binary state — fall back to plain-text body.
+          // The next auto-save will write a valid yjs_state.
+          newYdoc.getText('body').insert(0, data.body ?? '')
+        }
+      } else {
+        // Migration path for pre-Yjs documents — seed from plain-text body
+        newYdoc.getText('body').insert(0, data.body ?? '')
+      }
+      ydocRef.current = newYdoc
+      setYdoc(newYdoc)
+
+      // Start Broadcast provider for collaborative sync
+      const provider = new SupabaseBroadcastProvider(
+        supabase,
+        `doc-yjs-${documentId}`,
+        newYdoc,
+      )
+      providerRef.current = provider
+
       // Determine share permission for non-owners
       if (data.user_id !== userId) {
         const { data: shareRow } = await supabase
@@ -88,26 +125,22 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
       }
       setDocLoading(false)
     })()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      providerRef.current?.destroy()
+      providerRef.current = null
+      ydocRef.current?.destroy()
+      ydocRef.current = null
+      setYdoc(null)
+    }
   }, [documentId, userId])
 
-  // --- Realtime subscription for this single document ---
+  // --- Realtime subscription: document DELETE only ---
+  // (UPDATE sync is handled by the Yjs Broadcast provider)
   useEffect(() => {
     if (!documentId) return
     const channel = supabase
-      .channel(`document-${documentId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'documents',
-          filter: `id=eq.${documentId}`,
-        },
-        (payload) => {
-          setDoc(payload.new)
-        },
-      )
+      .channel(`document-delete-${documentId}`)
       .on(
         'postgres_changes',
         {
@@ -117,7 +150,6 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
           filter: `id=eq.${documentId}`,
         },
         () => {
-          // Document was deleted externally — go back to list
           navigate('/documents', { replace: true })
         },
       )
@@ -125,18 +157,30 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
     return () => { supabase.removeChannel(channel) }
   }, [documentId, navigate])
 
-  // --- Auto-save ---
+  // --- Auto-save: persists both plain-text body and Yjs binary state ---
   const autoSaveFn = useCallback(async () => {
-    if (docIdRef.current === null) return
+    if (docIdRef.current === null || !ydocRef.current) return
+    const ytext = ydocRef.current.getText('body')
     const { error: err } = await supabase
       .from('documents')
-      .update({ title: titleRef.current, body: bodyRef.current })
+      .update({
+        title: titleRef.current,
+        body: ytext.toString(),
+        yjs_state: uint8ArrayToHex(Y.encodeStateAsUpdate(ydocRef.current)),
+      })
       .eq('id', docIdRef.current)
     if (err) throw err
   }, [])
 
   const { status: autoSaveStatus, schedule: scheduleAutoSave, flush: flushAutoSave } =
     useAutoSave(autoSaveFn)
+
+  // --- Safety-net: flush auto-save on page unload ---
+  useEffect(() => {
+    const onBeforeUnload = () => flushAutoSave()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [flushAutoSave])
 
   // --- Editor handlers ---
 
@@ -151,7 +195,7 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   }
 
   function handleBodyChange(e) {
-    setEditBody(e.target.value)
+    onYjsBodyChange(e)
     scheduleAutoSave()
   }
 
@@ -159,12 +203,15 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
 
   function wrapSelection(marker) {
     const ta = textareaRef.current
-    if (!ta) return
+    const ydoc = ydocRef.current
+    if (!ta || !ydoc) return
     const { selectionStart: start, selectionEnd: end } = ta
-    const before = editBody.slice(0, start)
-    const selected = editBody.slice(start, end)
-    const after = editBody.slice(end)
-    setEditBody(before + marker + selected + marker + after)
+    const ytext = ydoc.getText('body')
+    // Insert markers via Yjs so the edit is broadcast to peers
+    ydoc.transact(() => {
+      ytext.insert(end, marker)
+      ytext.insert(start, marker)
+    }, 'local')
     scheduleAutoSave()
     requestAnimationFrame(() => {
       ta.selectionStart = start + marker.length
