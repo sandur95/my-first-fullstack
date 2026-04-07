@@ -304,11 +304,6 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
                 Share
               </button>
             ) : null}
-            {!isOwner ? (
-              <span className="share-badge">
-                {sharePermission === 'edit' ? 'Shared (edit)' : 'Shared (view)'}
-              </span>
-            ) : null}
           </div>
 
           {canEdit ? (

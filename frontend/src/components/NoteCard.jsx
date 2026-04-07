@@ -204,11 +204,6 @@ export default memo(function NoteCard({ note, isArchived, isOwner = true, shareP
         <time className="note-card-date" dateTime={note.created_at}>
           {new Date(note.created_at).toLocaleDateString()}
         </time>
-        {sharePermission !== null ? (
-          <span className="share-badge">
-            {sharePermission === 'edit' ? 'Edit' : 'View'}
-          </span>
-        ) : null}
         {/* Hide the ··· trigger entirely when no actions exist for this viewer.
             View-only sharees have nothing to act on. (rendering-conditional-render) */}
         {(isArchived ? isOwner : isOwner || sharePermission === 'edit') ? (

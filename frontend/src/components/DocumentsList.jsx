@@ -280,9 +280,6 @@ function SharedDocCard({ doc, onNavigate, formatDate, previewSnippet }) {
         <span className="doc-card-date">
           {formatDate(doc.updated_at)}
         </span>
-        <span className="share-badge">
-          {doc.sharePermission === 'edit' ? 'Edit' : 'View'}
-        </span>
       </div>
     </div>
   )
