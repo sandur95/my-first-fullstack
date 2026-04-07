@@ -22,6 +22,7 @@ import { supabase } from '../lib/supabase'
 export function useProfile(userId) {
   const [fullName, setFullName] = useState(null)
   const [avatarUrl, setAvatarUrl] = useState(null)
+  const [avatarPath, setAvatarPath] = useState(null)
 
   // useTransition replaces a manual isLoading boolean for the upload.
   // isPending resets automatically even if the transition throws.
@@ -47,6 +48,7 @@ export function useProfile(userId) {
       .then(async ({ data }) => {
         if (!data) return
         setFullName(data.full_name)
+        setAvatarPath(data.avatar_path ?? null)
         if (data.avatar_path) {
           const { data: blob } = await supabase.storage
             .from('avatars')
@@ -134,5 +136,5 @@ export function useProfile(userId) {
     setFullName(trimmed)
   }, [userId])
 
-  return { fullName, avatarUrl, isUploading, uploadAvatar, updateFullName }
+  return { fullName, avatarUrl, avatarPath, isUploading, uploadAvatar, updateFullName }
 }

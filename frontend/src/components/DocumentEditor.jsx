@@ -7,6 +7,7 @@ import { useAutoSave } from '../hooks/useAutoSave'
 import { useYjsTextarea } from '../hooks/useYjsTextarea'
 import { SupabaseBroadcastProvider } from '../lib/SupabaseBroadcastProvider'
 import { uint8ArrayToHex, hexToUint8Array } from '../lib/yjs-encoding'
+import { usePresence } from '../hooks/usePresence'
 import ThemeToggle from './ThemeToggle'
 import AvatarBubble from './AvatarBubble'
 import DocumentSharePanel from './DocumentSharePanel'
@@ -29,7 +30,7 @@ const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   const { documentId } = useParams()
   const navigate = useNavigate()
-  const { fullName, avatarUrl } = useProfile(userId)
+  const { fullName, avatarUrl, avatarPath } = useProfile(userId)
 
   // --- Document state ---
   const [doc, setDoc] = useState(null)
@@ -41,6 +42,10 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   const [shareOpen, setShareOpen] = useState(false)
   // null while loading, 'view' | 'edit' for sharees, undefined for owner
   const [sharePermission, setSharePermission] = useState(null)
+
+  // --- Derived sharing state (computed early so usePresence can reference canEdit) ---
+  const isOwner = doc !== null && doc.user_id === userId
+  const canEdit = isOwner || sharePermission === 'edit'
 
   // --- Yjs state ---
   // ydoc is stored in state so that useYjsTextarea re-runs when it's created.
@@ -60,6 +65,12 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
 
   // rerender-use-deferred-value — preview renders a frame behind typing
   const deferredBody = useDeferredValue(editBody)
+
+  // --- Presence awareness: avatar bar + remote cursors ---
+  const { peers, broadcastCursor } = usePresence(
+    providerRef.current, userId, userEmail, fullName, avatarPath, canEdit,
+  )
+  const [scrollTop, setScrollTop] = useState(0)
 
   // Keep refs in sync — written in an effect so the react-hooks/refs rule is satisfied.
   useEffect(() => {
@@ -197,6 +208,15 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   function handleBodyChange(e) {
     onYjsBodyChange(e)
     scheduleAutoSave()
+    broadcastCursor(e.target.selectionStart)
+  }
+
+  function handleSelect(e) {
+    broadcastCursor(e.target.selectionStart)
+  }
+
+  function handleTextareaScroll(e) {
+    setScrollTop(e.target.scrollTop)
   }
 
   // --- Keyboard shortcuts (Ctrl/Cmd + B = bold, I = italic, S = save) ---
@@ -252,16 +272,13 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
     splitContainerRef.current.style.setProperty('--split-left', `${clamped}%`)
   }
 
-  // --- Derived sharing state ---
-  const isOwner = doc !== null && doc.user_id === userId
-  const canEdit = isOwner || sharePermission === 'edit'
-
-  // --- Auto-save status label (rendering-conditional-render) ---
-  const saveStatusLabel =
+  // --- Save button label — merges auto-save status into the button text
+  // so it doesn't push other toolbar elements around. ---
+  const saveButtonLabel =
     autoSaveStatus === 'saving' ? 'Saving…' :
-    autoSaveStatus === 'saved' ? '✓ Saved' :
-    autoSaveStatus === 'error' ? 'Save failed' :
-    null
+    autoSaveStatus === 'saved'  ? '✓ Saved' :
+    autoSaveStatus === 'error'  ? 'Save failed' :
+    'Save'
 
   const navLinkClass = ({ isActive }) =>
     `section-toggle-btn${isActive ? ' section-toggle-btn--active' : ''}`
@@ -327,20 +344,12 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
             {canEdit ? (
               <button
                 type="button"
-                className="btn-primary"
+                className={`btn-primary doc-save-btn--${autoSaveStatus ?? 'idle'}`}
                 disabled={autoSaveStatus === 'saving'}
                 onClick={flushAutoSave}
               >
-                Save
+                {saveButtonLabel}
               </button>
-            ) : null}
-            {canEdit && saveStatusLabel !== null ? (
-              <span
-                className={`doc-autosave-status doc-autosave-status--${autoSaveStatus}`}
-                role="status"
-              >
-                {saveStatusLabel}
-              </span>
             ) : null}
             {isOwner ? (
               <button
@@ -350,6 +359,24 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
               >
                 Share
               </button>
+            ) : null}
+            {peers.length > 0 ? (
+              <div className="doc-presence-bar" aria-label="Connected users">
+                {peers.map((peer) => (
+                  <div
+                    key={peer.userId}
+                    className="doc-presence-avatar"
+                    style={{ color: peer.color }}
+                    title={peer.name}
+                  >
+                    <AvatarBubble
+                      avatarUrl={peer.avatarUrl}
+                      displayName={peer.name}
+                      size={28}
+                    />
+                  </div>
+                ))}
+              </div>
             ) : null}
           </div>
 
@@ -368,14 +395,52 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
 
           {canEdit ? (
             <div className="doc-editor-split" ref={splitContainerRef}>
-              <textarea
-                ref={textareaRef}
-                className="doc-editor-body"
-                value={editBody}
-                onChange={handleBodyChange}
-                placeholder="Start writing Markdown…"
-                aria-label="Document body"
-              />
+              <div className="doc-textarea-wrapper">
+                <textarea
+                  ref={textareaRef}
+                  className="doc-editor-body"
+                  value={editBody}
+                  onChange={handleBodyChange}
+                  onSelect={handleSelect}
+                  onScroll={handleTextareaScroll}
+                  placeholder="Start writing Markdown…"
+                  aria-label="Document body"
+                />
+                {peers.length > 0 ? (
+                  <div className="doc-cursor-overlay" aria-hidden="true">
+                    {peers.filter((p) => p.canEdit).map((peer) => {
+                      const lineIndex = editBody
+                        .substring(0, Math.min(peer.cursorIndex, editBody.length))
+                        .split('\n').length - 1
+                      const lineHeight = textareaRef.current
+                        ? parseFloat(getComputedStyle(textareaRef.current).lineHeight)
+                        : 22.4
+                      const paddingTop = textareaRef.current
+                        ? parseFloat(getComputedStyle(textareaRef.current).paddingTop)
+                        : 12
+                      const top = paddingTop + lineIndex * lineHeight - scrollTop
+                      return (
+                        <div key={peer.userId}>
+                          <div
+                            className="doc-cursor-line"
+                            style={{
+                              top,
+                              height: lineHeight,
+                              background: peer.color,
+                            }}
+                          />
+                          <span
+                            className="doc-cursor-label"
+                            style={{ background: peer.color, top }}
+                          >
+                            {peer.name}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
               <div
                 className="doc-editor-divider"
                 onPointerDown={handleDividerPointerDown}
