@@ -1,4 +1,5 @@
 import { useState, useCallback, useDeferredValue, useRef, useEffect, lazy, Suspense } from 'react'
+import getCaretCoordinates from 'textarea-caret'
 import { useParams, useNavigate, NavLink } from 'react-router'
 import * as Y from 'yjs'
 import { supabase } from '../lib/supabase'
@@ -409,34 +410,50 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
                 {peers.length > 0 ? (
                   <div className="doc-cursor-overlay" aria-hidden="true">
                     {peers.filter((p) => p.canEdit).map((peer) => {
-                      const lineIndex = editBody
-                        .substring(0, Math.min(peer.cursorIndex, editBody.length))
-                        .split('\n').length - 1
+                      if (!textareaRef.current || typeof peer.cursorIndex !== 'number') return null;
+                      // Clamp cursor index to valid range
+                      const clampedIndex = Math.max(0, Math.min(peer.cursorIndex, editBody.length));
+                      // Find the start and end indices of the visual line containing the cursor
+                      const value = editBody;
+                      // Find previous and next newline (or start/end of string)
+                      let lineStart = value.lastIndexOf('\n', clampedIndex - 1) + 1;
+                      let lineEnd = value.indexOf('\n', clampedIndex);
+                      if (lineEnd === -1) lineEnd = value.length;
+                      // Get caret coordinates for start and end of the line
+                      const coordsStart = getCaretCoordinates(textareaRef.current, lineStart);
+                      const coordsEnd = getCaretCoordinates(textareaRef.current, lineEnd);
+                      // Adjust for scroll
+                      const top = coordsStart.top - scrollTop;
+                      // Use caret coordinates at the peer's cursor index for visual row
+                      const caretCoords = getCaretCoordinates(textareaRef.current, clampedIndex);
                       const lineHeight = textareaRef.current
                         ? parseFloat(getComputedStyle(textareaRef.current).lineHeight)
-                        : 22.4
-                      const paddingTop = textareaRef.current
-                        ? parseFloat(getComputedStyle(textareaRef.current).paddingTop)
-                        : 12
-                      const top = paddingTop + lineIndex * lineHeight - scrollTop
+                        : 22.4;
+                      const highlightWidth = textareaRef.current ? textareaRef.current.clientWidth : 0;
+                      const highlightTop = caretCoords.top - scrollTop;
                       return (
                         <div key={peer.userId}>
                           <div
                             className="doc-cursor-line"
                             style={{
-                              top,
+                              top: highlightTop,
+                              left: 0,
                               height: lineHeight,
+                              width: highlightWidth,
                               background: peer.color,
+                              opacity: 0.35,
+                              position: 'absolute',
+                              pointerEvents: 'none',
                             }}
                           />
                           <span
                             className="doc-cursor-label"
-                            style={{ background: peer.color, top }}
+                            style={{ background: peer.color, top: highlightTop, left: 0, position: 'absolute' }}
                           >
                             {peer.name}
                           </span>
                         </div>
-                      )
+                      );
                     })}
                   </div>
                 ) : null}
