@@ -1,4 +1,4 @@
-import { useState, useCallback, useDeferredValue, useRef, useEffect, lazy, Suspense } from 'react'
+import { useState, useCallback, useDeferredValue, useRef, useEffect, useLayoutEffect, lazy, Suspense } from 'react'
 import getCaretCoordinates from 'textarea-caret'
 import { useParams, useNavigate, NavLink } from 'react-router'
 import * as Y from 'yjs'
@@ -71,13 +71,29 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   const { peers, broadcastCursor } = usePresence(
     providerRef.current, userId, userEmail, fullName, avatarPath, canEdit,
   )
-  const [scrollTop, setScrollTop] = useState(0)
-
   // Keep refs in sync — written in an effect so the react-hooks/refs rule is satisfied.
   useEffect(() => {
     docIdRef.current = documentId
     titleRef.current = editTitle
   })
+
+  // --- Zero-lag remote cursor scroll sync ---
+  // Bypasses React state entirely: a native passive scroll listener applies
+  // a CSS transform directly to the overlay inner div so the cursor highlights
+  // move in the same frame as the textarea scroll (client-passive-event-listeners).
+  const overlayInnerRef = useRef(null)
+  useLayoutEffect(() => {
+    const ta = textareaRef.current
+    const inner = overlayInnerRef.current
+    if (!ta || !inner) return
+    const onScroll = () => {
+      inner.style.transform = `translateY(-${ta.scrollTop}px)`
+    }
+    // Apply immediately so existing scroll offset is reflected before the first scroll event
+    onScroll()
+    ta.addEventListener('scroll', onScroll, { passive: true })
+    return () => ta.removeEventListener('scroll', onScroll)
+  }, [canEdit])
 
   // --- Fetch document + initialise Yjs doc & Broadcast provider ---
   useEffect(() => {
@@ -216,10 +232,6 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
     broadcastCursor(e.target.selectionStart)
   }
 
-  function handleTextareaScroll(e) {
-    setScrollTop(e.target.scrollTop)
-  }
-
   // --- Keyboard shortcuts (Ctrl/Cmd + B = bold, I = italic, S = save) ---
 
   function wrapSelection(marker) {
@@ -257,6 +269,14 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
       e.preventDefault()
       wrapSelection('_')
     }
+  }
+
+  // --- Jump to peer cursor: scrolls the textarea to centre on the peer's last cursor position ---
+  function scrollToPeer(peer) {
+    const ta = textareaRef.current
+    if (!ta || typeof peer.cursorIndex !== 'number') return
+    const coords = getCaretCoordinates(ta, peer.cursorIndex)
+    ta.scrollTo({ top: coords.top - ta.clientHeight / 2, behavior: 'smooth' })
   }
 
   // --- Resizable split pane (pointer events + CSS variable, zero re-renders) ---
@@ -364,18 +384,21 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
             {peers.length > 0 ? (
               <div className="doc-presence-bar" aria-label="Connected users">
                 {peers.map((peer) => (
-                  <div
+                  <button
                     key={peer.userId}
+                    type="button"
                     className="doc-presence-avatar"
                     style={{ color: peer.color }}
-                    title={peer.name}
+                    title={`Jump to ${peer.name}'s cursor`}
+                    aria-label={`Jump to ${peer.name}'s cursor`}
+                    onClick={() => scrollToPeer(peer)}
                   >
                     <AvatarBubble
                       avatarUrl={peer.avatarUrl}
                       displayName={peer.name}
                       size={28}
                     />
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : null}
@@ -403,60 +426,47 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
                   value={editBody}
                   onChange={handleBodyChange}
                   onSelect={handleSelect}
-                  onScroll={handleTextareaScroll}
                   placeholder="Start writing Markdown…"
                   aria-label="Document body"
                 />
-                {peers.length > 0 ? (
-                  <div className="doc-cursor-overlay" aria-hidden="true">
+                <div className="doc-cursor-overlay" aria-hidden="true">
+                  {/* Inner div is always rendered so overlayInnerRef is populated when canEdit is true,
+                      allowing the scroll listener (useLayoutEffect) to attach on the first render. */}
+                  <div ref={overlayInnerRef} style={{ position: 'absolute', inset: 0 }}>
                     {peers.filter((p) => p.canEdit).map((peer) => {
-                      if (!textareaRef.current || typeof peer.cursorIndex !== 'number') return null;
-                      // Clamp cursor index to valid range
-                      const clampedIndex = Math.max(0, Math.min(peer.cursorIndex, editBody.length));
-                      // Find the start and end indices of the visual line containing the cursor
-                      const value = editBody;
-                      // Find previous and next newline (or start/end of string)
-                      let lineStart = value.lastIndexOf('\n', clampedIndex - 1) + 1;
-                      let lineEnd = value.indexOf('\n', clampedIndex);
-                      if (lineEnd === -1) lineEnd = value.length;
-                      // Get caret coordinates for start and end of the line
-                      const coordsStart = getCaretCoordinates(textareaRef.current, lineStart);
-                      const coordsEnd = getCaretCoordinates(textareaRef.current, lineEnd);
-                      // Adjust for scroll
-                      const top = coordsStart.top - scrollTop;
-                      // Use caret coordinates at the peer's cursor index for visual row
-                      const caretCoords = getCaretCoordinates(textareaRef.current, clampedIndex);
-                      const lineHeight = textareaRef.current
-                        ? parseFloat(getComputedStyle(textareaRef.current).lineHeight)
-                        : 22.4;
-                      const highlightWidth = textareaRef.current ? textareaRef.current.clientWidth : 0;
-                      const highlightTop = caretCoords.top - scrollTop;
-                      return (
-                        <div key={peer.userId}>
-                          <div
-                            className="doc-cursor-line"
-                            style={{
-                              top: highlightTop,
-                              left: 0,
-                              height: lineHeight,
-                              width: highlightWidth,
-                              background: peer.color,
-                              opacity: 0.35,
-                              position: 'absolute',
-                              pointerEvents: 'none',
-                            }}
-                          />
-                          <span
-                            className="doc-cursor-label"
-                            style={{ background: peer.color, top: highlightTop, left: 0, position: 'absolute' }}
-                          >
-                            {peer.name}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        if (!textareaRef.current || typeof peer.cursorIndex !== 'number') return null;
+                        const clampedIndex = Math.max(0, Math.min(peer.cursorIndex, editBody.length));
+                        // getCaretCoordinates returns content-space top (no scroll subtraction needed)
+                        const caretCoords = getCaretCoordinates(textareaRef.current, clampedIndex);
+                        const lineHeight = parseFloat(getComputedStyle(textareaRef.current).lineHeight) || 22.4;
+                        const highlightWidth = textareaRef.current.clientWidth;
+                        const highlightTop = caretCoords.top;
+                        return (
+                          <div key={peer.userId}>
+                            <div
+                              className="doc-cursor-line"
+                              style={{
+                                top: highlightTop,
+                                left: 0,
+                                height: lineHeight,
+                                width: highlightWidth,
+                                background: peer.color,
+                                opacity: 0.35,
+                                position: 'absolute',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                            <span
+                              className="doc-cursor-label"
+                              style={{ background: peer.color, top: highlightTop, left: 0, position: 'absolute' }}
+                            >
+                              {peer.name}
+                            </span>
+                          </div>
+                        );
+                      })}
                   </div>
-                ) : null}
+                </div>
               </div>
               <div
                 className="doc-editor-divider"

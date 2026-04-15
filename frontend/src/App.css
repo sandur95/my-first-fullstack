@@ -1467,10 +1467,16 @@ button:disabled {
   outline: 2px solid currentColor;
   outline-offset: 1px;
   transition: transform .15s;
-  cursor: default;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
 }
 .doc-presence-avatar:hover {
   transform: scale(1.15);
+}
+.doc-presence-avatar:active {
+  transform: scale(0.95);
 }
 
 /* ---------------------------------------------------------------------------
