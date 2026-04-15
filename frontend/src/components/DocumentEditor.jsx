@@ -60,6 +60,9 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
   const splitContainerRef = useRef(null)
   const docIdRef = useRef(null)
   const titleRef = useRef('')
+  // Tracks whether the local user is focused on the title input so incoming
+  // remote title-update broadcasts are suppressed while actively typing.
+  const titleFocusedRef = useRef(false)
 
   // Bind Yjs Y.Text to the textarea — returns { text, handleChange }
   const { text: editBody, handleChange: onYjsBodyChange } = useYjsTextarea(ydoc, textareaRef)
@@ -137,6 +140,11 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
         newYdoc,
       )
       providerRef.current = provider
+
+      // Receive title changes broadcast by collaborators
+      provider._onTitleUpdate = (newTitle) => {
+        if (!titleFocusedRef.current) setEditTitle(newTitle)
+      }
 
       // Determine share permission for non-owners
       if (data.user_id !== userId) {
@@ -219,6 +227,7 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
 
   function handleTitleChange(e) {
     setEditTitle(e.target.value)
+    providerRef.current?.broadcastTitleUpdate(e.target.value)
     scheduleAutoSave()
   }
 
@@ -410,6 +419,8 @@ export default function DocumentEditor({ userId, userEmail, onSignOut }) {
               className="doc-editor-title"
               value={editTitle}
               onChange={handleTitleChange}
+              onFocus={() => { titleFocusedRef.current = true }}
+              onBlur={() => { titleFocusedRef.current = false }}
               placeholder="Document title"
               aria-label="Document title"
             />

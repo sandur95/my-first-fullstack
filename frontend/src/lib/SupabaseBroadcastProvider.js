@@ -50,6 +50,10 @@ export class SupabaseBroadcastProvider {
     /** @type {(() => void) | null} */
     this._onPresenceRequest = null
 
+    // --- Title callback (set by DocumentEditor) ---
+    /** @type {((title: string) => void) | null} */
+    this._onTitleUpdate = null
+
     // --- Yjs update listener: broadcast local changes ---
     this._onUpdate = (update, origin) => {
       if (origin === 'broadcast' || this.destroyed) return
@@ -90,6 +94,11 @@ export class SupabaseBroadcastProvider {
         if (this.destroyed) return
         this._onPresenceLeave?.(payload.userId)
       })
+      // --- Title events ---
+      .on('broadcast', { event: 'title-update' }, ({ payload }) => {
+        if (this.destroyed) return
+        this._onTitleUpdate?.(payload.title)
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED' && !this.destroyed) {
           // Ask existing peers for current state
@@ -125,6 +134,12 @@ export class SupabaseBroadcastProvider {
   broadcastLeave(userId) {
     if (this.destroyed) return
     this._send('presence-leave', { userId })
+  }
+
+  /** Broadcast a title change to all peers. */
+  broadcastTitleUpdate(title) {
+    if (this.destroyed) return
+    this._send('title-update', { title })
   }
 
   /**
