@@ -23,7 +23,17 @@ insert into auth.users (
   updated_at,
   raw_app_meta_data,
   raw_user_meta_data,
-  is_super_admin
+  is_super_admin,
+  -- Token columns must be empty-string (not NULL) — GoTrue scans them as
+  -- non-nullable strings and returns "Database error querying schema" when NULL.
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  phone_change,
+  phone_change_token,
+  email_change_token_current,
+  reauthentication_token
 ) values
   (
     '00000000-0000-0000-0000-000000000001',
@@ -31,13 +41,14 @@ insert into auth.users (
     'authenticated',
     'authenticated',
     'alice@example.com',
-    '$2a$10$PgjZBUKhGQMfQmRA2p2Q7.9TmG9YNEzAfJBiXWf4i6bFpVpSTi23C',
+    '$2a$10$82bk6KYhHXGo00jsMBbKR.AnNaltvm/pmPeZaSpZ3cQ7n6Kuo/.5W',
     now(),
     now(),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"full_name":"Alice Smith"}',
-    false
+    false,
+    '', '', '', '', '', '', '', ''
   ),
   (
     '00000000-0000-0000-0000-000000000002',
@@ -45,13 +56,14 @@ insert into auth.users (
     'authenticated',
     'authenticated',
     'bob@example.com',
-    '$2a$10$PgjZBUKhGQMfQmRA2p2Q7.9TmG9YNEzAfJBiXWf4i6bFpVpSTi23C',
+    '$2a$10$eIzaS6fER/XIeeqLmEnab.NeNrKkFjRd0./ke2fZVoPUPYcTbMSh6',
     now(),
     now(),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"full_name":"Bob Jones"}',
-    false
+    false,
+    '', '', '', '', '', '', '', ''
   ),
   (
     '00000000-0000-0000-0000-000000000003',
@@ -59,18 +71,58 @@ insert into auth.users (
     'authenticated',
     'authenticated',
     'carol@example.com',
-    '$2a$10$PgjZBUKhGQMfQmRA2p2Q7.9TmG9YNEzAfJBiXWf4i6bFpVpSTi23C',
+    '$2a$10$pdAcl0//hc8IBt086DGFwuypEqDp6LJuD1xSSyS6WEroEUP0i0LC2',
     now(),
     now(),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"full_name":"Carol White"}',
-    false
+    false,
+    '', '', '', '', '', '', '', ''
   )
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
--- 2. Public user profiles
+-- 1b. Auth identities (required by GoTrue v2+ for email/password sign-in)
+--     Without these rows, signInWithPassword returns "Database error querying
+--     schema" even though auth.users rows exist.
+--     provider_id = email, identity_data must contain both "email" and "sub".
+-- ---------------------------------------------------------------------------
+insert into auth.identities (
+  id,
+  user_id,
+  provider_id,
+  provider,
+  identity_data,
+  last_sign_in_at,
+  created_at,
+  updated_at
+) values
+  (
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'alice@example.com',
+    'email',
+    '{"sub":"00000000-0000-0000-0000-000000000001","email":"alice@example.com"}',
+    now(), now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000002',
+    'bob@example.com',
+    'email',
+    '{"sub":"00000000-0000-0000-0000-000000000002","email":"bob@example.com"}',
+    now(), now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000003',
+    'carol@example.com',
+    'email',
+    '{"sub":"00000000-0000-0000-0000-000000000003","email":"carol@example.com"}',
+    now(), now(), now()
+  )
+on conflict (provider, provider_id) do nothing;
 -- ---------------------------------------------------------------------------
 insert into public.users (id, email, full_name, created_at, updated_at) values
   ('00000000-0000-0000-0000-000000000001', 'alice@example.com', 'Alice Smith', now(), now()),
